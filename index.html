@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bronx Children's Museum - Interactive Explorer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+  <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+  <style>
+    body {
+      margin: 0; padding: 0; background-color: #f0f7f4;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden;
+    }
+    #ui-container {
+      position: absolute; top: 20px; text-align: center;
+      background: rgba(255, 255, 255, 0.85); padding: 15px 30px;
+      border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 10;
+    }
+    h1 { margin: 0; color: #2c5e4f; font-size: 24px; }
+    p { margin: 5px 0 0 0; color: #555; }
+    canvas {
+      border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      transform: scaleX(-1); /* Mirrors the webcam so it feels like a mirror */
+    }
+    #popup {
+      display: none; position: absolute; top: 160px; right: 10%;
+      background: white; padding: 20px; border-radius: 15px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 250px; z-index: 20;
+    }
+    #popup h3 { margin-top: 0; color: #e6a817; }
+  </style>
+</head>
+<body>
+
+  <div id="ui-container">
+    <h1>Bronx River Explorer 🌿</h1>
+    <p>Reach up to make the Sun glow! Tap the red items to clean the river.</p>
+    <p>Score: <strong id="score">0</strong></p>
+  </div>
+
+  <div id="popup">
+    <h3>☀️ Sunlight Fact!</h3>
+    <p>Did you know plants in our Bronx community gardens need at least 6 hours of direct sunlight a day to grow strong?</p>
+  </div>
+
+  <script>
+    let video;
+    let handpose;
+    let predictions = [];
+    
+    // Game Objects
+    let sun = { x: 150, y: 100, radius: 50, glowing: false };
+    let trashItems = [];
+    let score = 0;
+
+    function setup() {
+      createCanvas(800, 600);
+      video = createCapture(VIDEO);
+      video.size(width, height);
+      video.hide(); 
+
+      // Initialize ml5.js handpose
+      handpose = ml5.handpose(video, () => console.log('Hand tracking ready!'));
+      handpose.on('predict', results => { predictions = results; });
+
+      // Spawn initial red items (pollutants)
+      for(let i = 0; i < 4; i++){ spawnTrash(); }
+    }
+
+    function spawnTrash() {
+      trashItems.push({
+        x: random(100, width - 100), y: random(height/2 + 50, height - 100),
+        radius: 25, active: true
+      });
+    }
+
+    function draw() {
+      // Draw webcam feed
+      image(video, 0, 0, width, height);
+
+      // Minimalistic overlay styling
+      background(255, 255, 255, 60); 
+
+      // Draw "River" zone at the bottom
+      noStroke(); fill(0, 150, 255, 80);
+      rect(0, height/2 + 50, width, height/2 - 50);
+
+      checkInteractions();
+
+      // Render the Sun
+      if (sun.glowing) {
+        fill(255, 220, 0, 220); stroke(255, 200, 0); strokeWeight(8);
+      } else {
+        fill(255, 200, 0, 180); noStroke();
+      }
+      circle(sun.x, sun.y, sun.radius * 2);
+      
+      // Render Red Items
+      for (let i = trashItems.length - 1; i >= 0; i--) {
+        let t = trashItems[i];
+        if (t.active) {
+          fill(220, 50, 50, 200); noStroke();
+          circle(t.x, t.y, t.radius * 2);
+        }
+      }
+
+      drawCursor();
+    }
+
+    function checkInteractions() {
+      sun.glowing = false;
+      document.getElementById('popup').style.display = 'none';
+
+      if (predictions.length > 0) {
+        // Track the tip of the index finger
+        let indexTip = predictions[0].annotations.indexFinger[3]; 
+        let hx = indexTip[0]; let hy = indexTip[1];
+        
+        // 1. Check Sun Interaction
+        if (dist(hx, hy, sun.x, sun.y) < sun.radius + 30) {
+          sun.glowing = true;
+          document.getElementById('popup').style.display = 'block'; // Show educational popup
+        }
+
+        // 2. Check Trash Interaction
+        for (let i = 0; i < trashItems.length; i++) {
+          let t = trashItems[i];
+          if (t.active && dist(hx, hy, t.x, t.y) < t.radius + 30) {
+            t.active = false;
+            score += 10;
+            document.getElementById('score').innerText = score;
+            setTimeout(spawnTrash, 2000); // Replace item after 2 seconds
+          }
+        }
+      }
+    }
+
+    function drawCursor() {
+      if (predictions.length > 0) {
+        let indexTip = predictions[0].annotations.indexFinger[3];
+        fill(44, 94, 79, 220); noStroke();
+        ellipse(indexTip[0], indexTip[1], 15, 15); // Draw dot on finger
+      }
+    }
+  </script>
+</body>
+</html>
