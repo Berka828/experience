@@ -2,41 +2,41 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>BXCM - Interactive Explorer</title>
+  <title>BXCM - Multi-Explorer</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
   <style>
     body {
-      margin: 0; padding: 0; background-color: #eaf2ef;
+      margin: 0; padding: 0; background-color: #1a1a2e;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden;
     }
     #ui-container {
       position: absolute; top: 20px; text-align: center;
-      background: rgba(255, 255, 255, 0.9); padding: 15px 30px;
-      border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); z-index: 10;
+      background: rgba(255, 255, 255, 0.95); padding: 15px 30px;
+      border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 10;
     }
     h1 { margin: 0; color: #2c5e4f; font-size: 26px; }
     p { margin: 5px 0 0 0; color: #444; font-weight: bold; }
     canvas {
-      border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);
       transform: scaleX(-1); /* Mirrors the webcam */
     }
     #popup {
-      display: none; position: absolute; top: 180px; right: 8%;
+      display: none; position: absolute; top: 160px; right: 5%;
       background: #fff; padding: 20px; border-radius: 15px; border-left: 8px solid #2c5e4f;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-width: 260px; z-index: 20;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3); max-width: 280px; z-index: 20;
     }
     #popup h3 { margin-top: 0; margin-bottom: 10px; color: #2c5e4f; }
-    #popup p { font-weight: normal; font-size: 14px; }
+    #popup p { font-weight: normal; font-size: 15px; }
   </style>
 </head>
 <body>
 
   <div id="ui-container">
-    <h1>Bronx Explorer 🌱</h1>
-    <p id="instructions">Level 1: Tap the red pollution to clean the Bronx River!</p>
-    <p>Level: <span id="level-display">1</span> | Score: <strong id="score">0</strong></p>
+    <h1>Bronx Explorer 🌍</h1>
+    <p id="instructions">Level 1: Team up! Clean the pollution from all sides of the River.</p>
+    <p>Level: <span id="level-display">1</span> | Team Score: <strong id="score">0</strong></p>
   </div>
 
   <div id="popup">
@@ -49,25 +49,33 @@
     let handpose;
     let predictions = [];
     
+    // Multi-player colors: Cyan, Magenta, Yellow, Lime
+    let playerColors = [ [0, 255, 255], [255, 0, 255], [255, 255, 0], [50, 255, 50] ];
+    
     // Game State
     let currentScene = 1;
     let score = 0;
-    let itemsCollected = 0;
 
-    // Scene 1 Objects (River)
+    // Lvl 1: River
     let trashItems = [];
     
-    // Scene 2 Objects (Garden)
-    let cloud = { x: 400, y: 100, width: 150, height: 80 };
+    // Lvl 2: Garden (3 clouds for 3 kids)
+    let clouds = [];
     let raindrops = [];
     let flowers = [];
 
+    // Lvl 3: Music
+    let instruments = [];
+    let musicNotes = [];
+    let communityEnergy = 0;
+
     function setup() {
-      createCanvas(800, 600);
+      createCanvas(900, 650);
       video = createCapture(VIDEO);
       video.size(width, height);
       video.hide(); 
 
+      // ml5 handpose defaults to detecting multiple hands!
       handpose = ml5.handpose(video, () => console.log('Hand tracking ready!'));
       handpose.on('predict', results => { predictions = results; });
 
@@ -76,18 +84,31 @@
 
     function initScene1() {
       trashItems = [];
-      for(let i = 0; i < 5; i++){ spawnTrash(); }
+      // Spread trash across the screen for multiple kids
+      for(let i = 0; i < 9; i++){
+        trashItems.push({
+          x: random(50, width - 50), y: random(height/2 + 50, height - 80),
+          radius: 25, active: true
+        });
+      }
     }
 
-    function spawnTrash() {
-      trashItems.push({
-        x: random(100, width - 100), y: random(height/2 + 50, height - 100),
-        radius: 25, active: true
-      });
+    function initScene2() {
+      // 3 clouds stationed Left, Center, Right
+      clouds = [
+        { x: width * 0.2, y: 120, w: 120, h: 70 },
+        { x: width * 0.5, y: 100, w: 140, h: 80 },
+        { x: width * 0.8, y: 120, w: 120, h: 70 }
+      ];
     }
 
-    function spawnRaindrop() {
-      raindrops.push({ x: cloud.x + random(-50, 50), y: cloud.y + 40, radius: 10, active: true });
+    function initScene3() {
+      // 3 Instruments (Drum, Turntable, Horn placeholders)
+      instruments = [
+        { x: width * 0.2, y: height/2, radius: 60, type: 'Drum', color: [255, 100, 100] },
+        { x: width * 0.5, y: height/2, radius: 70, type: 'Turntable', color: [100, 255, 100] },
+        { x: width * 0.8, y: height/2, radius: 60, type: 'Horn', color: [100, 100, 255] }
+      ];
     }
 
     function showPopup(title, text) {
@@ -96,141 +117,163 @@
       document.getElementById('popup').style.display = 'block';
     }
 
-    function hidePopup() {
-      document.getElementById('popup').style.display = 'none';
-    }
-
     function draw() {
       image(video, 0, 0, width, height);
-      background(255, 255, 255, 40); // Light overlay for readability
+      background(255, 255, 255, 40);
 
-      if (currentScene === 1) {
-        drawScene1();
-      } else if (currentScene === 2) {
-        drawScene2();
-      }
+      if (currentScene === 1) drawScene1();
+      else if (currentScene === 2) drawScene2();
+      else if (currentScene === 3) drawScene3();
 
-      drawSkeleton();
+      drawSkeletons();
     }
 
-    // --- SCENE 1: BRONX RIVER ---
+    // --- LEVEL 1: RIVER ---
     function drawScene1() {
-      // Draw River
       noStroke(); fill(0, 100, 200, 90);
       rect(0, height/2 + 50, width, height/2 - 50);
 
-      let allClean = true;
-
-      for (let i = 0; i < trashItems.length; i++) {
-        let t = trashItems[i];
+      let activeCount = 0;
+      for (let t of trashItems) {
         if (t.active) {
-          allClean = false;
-          fill(220, 50, 50, 200); noStroke();
-          circle(t.x, t.y, t.radius * 2);
-
-          // Interaction Check
+          activeCount++;
+          fill(220, 50, 50, 200); noStroke(); circle(t.x, t.y, t.radius * 2);
+          
           if (checkCollision(t.x, t.y, t.radius)) {
             t.active = false;
-            score += 10;
-            itemsCollected++;
-            document.getElementById('score').innerText = score;
-            showPopup("🐟 River Cleanup!", "Great job! Removing pollution helps local animals like the Alewife fish thrive in the Bronx River.");
+            updateScore(10);
+            if (activeCount === 8) showPopup("🐟 Teamwork!", "Many hands make light work! You're saving the Bronx River habitats together.");
           }
         }
       }
 
-      // Progress to Scene 2
-      if (allClean && itemsCollected >= 5) {
-        currentScene = 2;
-        document.getElementById('level-display').innerText = "2";
-        document.getElementById('instructions').innerText = "Level 2: Touch the cloud to water the community garden!";
-        hidePopup();
+      if (activeCount === 0) {
+        currentScene = 2; updateLevelUI(2, "Level 2: Everyone pick a cloud to water the seeds!");
+        initScene2(); document.getElementById('popup').style.display = 'none';
       }
     }
 
-    // --- SCENE 2: COMMUNITY GARDEN ---
+    // --- LEVEL 2: GARDEN ---
     function drawScene2() {
-      // Draw Soil
-      noStroke(); fill(101, 67, 33, 120);
-      rect(0, height - 150, width, 150);
+      noStroke(); fill(101, 67, 33, 130); rect(0, height - 120, width, 120); // Soil
 
-      // Draw Cloud
-      fill(200, 200, 200, 220); noStroke();
-      ellipse(cloud.x, cloud.y, cloud.width, cloud.height);
-      ellipse(cloud.x - 40, cloud.y + 10, 80, 60);
-      ellipse(cloud.x + 40, cloud.y + 10, 80, 60);
+      let wateringHappening = false;
+      for (let c of clouds) {
+        fill(220, 220, 220, 230); noStroke();
+        ellipse(c.x, c.y, c.w, c.h);
+        ellipse(c.x - 30, c.y + 10, c.w*0.7, c.h*0.8);
+        ellipse(c.x + 30, c.y + 10, c.w*0.7, c.h*0.8);
 
-      // Cloud Interaction -> Spawn Rain
-      if (checkCollision(cloud.x, cloud.y, cloud.width/2)) {
-        if (frameCount % 10 === 0) spawnRaindrop();
-        showPopup("🌧️ Watering Time!", "Community gardens in the Bronx provide fresh food. Water helps the seeds break open and grow roots!");
-      } else if (frameCount % 100 === 0) {
-        hidePopup();
+        if (checkCollision(c.x, c.y, c.w/2)) {
+          wateringHappening = true;
+          if (frameCount % 8 === 0) raindrops.push({ x: c.x + random(-30,30), y: c.y + 30, active: true });
+        }
       }
 
-      // Draw and Animate Rain
-      for (let i = raindrops.length - 1; i >= 0; i--) {
-        let r = raindrops[i];
-        if (r.active) {
-          fill(0, 150, 255, 200);
-          circle(r.x, r.y, r.radius * 2);
-          r.y += 5; // Rain falls
+      if (wateringHappening && frameCount % 60 === 0) {
+        showPopup("🌱 Community Gardens", "The Bronx has over 100 community gardens! Working together helps provide fresh food for neighborhoods.");
+      }
 
-          // If rain hits the soil, grow a flower!
-          if (r.y > height - 100) {
-            r.active = false;
-            if (flowers.length < 8) {
-              flowers.push({ x: r.x, y: height - 100, size: 0 });
-              score += 5;
-              document.getElementById('score').innerText = score;
-            }
+      // Rain & Flowers
+      for (let r of raindrops) {
+        if (r.active) {
+          fill(0, 150, 255, 200); circle(r.x, r.y, 12);
+          r.y += 6;
+          if (r.y > height - 80) {
+            r.active = false; updateScore(2);
+            if (flowers.length < 15) flowers.push({ x: r.x, y: height - 80, size: 0 });
           }
         }
       }
 
-      // Draw Flowers
+      let grownFlowers = 0;
       for (let f of flowers) {
-        if (f.size < 40) f.size += 0.5; // Flower growth animation
-        fill(46, 204, 113); rect(f.x - 2, f.y - f.size, 4, f.size); // Stem
-        fill(255, 105, 180); circle(f.x, f.y - f.size, f.size/1.5); // Petals
+        if (f.size < 45) f.size += 0.4; else grownFlowers++;
+        fill(46, 204, 113); rect(f.x - 3, f.y - f.size, 6, f.size); 
+        fill(255, random(100, 200), 100); circle(f.x, f.y - f.size, f.size/1.5); 
+      }
+
+      if (grownFlowers >= 15) {
+        currentScene = 3; updateLevelUI(3, "Level 3: The Bronx Beats! Play the instruments together to fill the energy!");
+        initScene3(); document.getElementById('popup').style.display = 'none';
       }
     }
 
-    // --- SKELETON & COLLISION LOGIC ---
-    function drawSkeleton() {
-      if (predictions.length > 0) {
-        let hand = predictions[0];
-        
-        // 1. Draw Bones (Lines)
+    // --- LEVEL 3: MUSIC & ARTS ---
+    function drawScene3() {
+      // Energy Bar
+      fill(50, 50, 50, 200); rect(width/2 - 150, 30, 300, 25, 10);
+      fill(255, 215, 0); rect(width/2 - 150, 30, map(communityEnergy, 0, 1000, 0, 300), 25, 10);
+      
+      if (communityEnergy > 10 && communityEnergy < 20) {
+        showPopup("🎤 Birthplace of Hip Hop!", "The Bronx created Hip Hop in the 1970s. It takes a whole community to make a great track!");
+      }
+
+      // Draw Instruments
+      for (let inst of instruments) {
+        fill(inst.color[0], inst.color[1], inst.color[2], 200);
+        circle(inst.x, inst.y, inst.radius * 2);
+        fill(255); textAlign(CENTER, CENTER); textSize(18); text(inst.type, inst.x, inst.y);
+
+        if (checkCollision(inst.x, inst.y, inst.radius)) {
+          communityEnergy += 2;
+          updateScore(5);
+          if (frameCount % 5 === 0) {
+             musicNotes.push({ x: inst.x, y: inst.y - 40, c: inst.color, life: 255 });
+          }
+        }
+      }
+
+      // Animate Music Notes
+      for (let i = musicNotes.length - 1; i >= 0; i--) {
+        let n = musicNotes[i];
+        fill(n.c[0], n.c[1], n.c[2], n.life); textSize(30); text("♪", n.x, n.y);
+        n.y -= 3; n.x += sin(frameCount * 0.1) * 2; n.life -= 4;
+        if (n.life <= 0) musicNotes.splice(i, 1);
+      }
+
+      if (communityEnergy >= 1000) {
+        showPopup("🎉 Amazing Job!", "You all worked together to clean the river, grow a garden, and make beautiful music. You are Bronx Explorers!");
+      }
+    }
+
+    // --- MULTI-PLAYER SKELETON & COLLISION ---
+    function drawSkeletons() {
+      for (let k = 0; k < predictions.length; k++) {
+        let hand = predictions[k];
+        let pColor = playerColors[k % playerColors.length]; // Give each kid a unique color
+
         let fingers = ['thumb', 'indexFinger', 'middleFinger', 'ringFinger', 'pinky'];
         for (let i = 0; i < fingers.length; i++) {
           let finger = hand.annotations[fingers[i]];
-          noFill(); stroke(255, 255, 255, 150); strokeWeight(4);
+          noFill(); stroke(pColor[0], pColor[1], pColor[2], 180); strokeWeight(5);
           beginShape();
-          vertex(hand.landmarks[0][0], hand.landmarks[0][1]); // Connect to palm base
-          for (let j = 0; j < finger.length; j++) {
-            vertex(finger[j][0], finger[j][1]);
-          }
+          vertex(hand.landmarks[0][0], hand.landmarks[0][1]);
+          for (let j = 0; j < finger.length; j++) vertex(finger[j][0], finger[j][1]);
           endShape();
         }
 
-        // 2. Draw Joints (Circles)
         for (let j = 0; j < hand.landmarks.length; j++) {
-          let keypoint = hand.landmarks[j];
-          fill(255, 200, 0); stroke(200, 100, 0); strokeWeight(2);
-          ellipse(keypoint[0], keypoint[1], 10, 10);
+          fill(255); stroke(pColor[0], pColor[1], pColor[2]); strokeWeight(2);
+          ellipse(hand.landmarks[j][0], hand.landmarks[j][1], 12, 12);
         }
       }
     }
 
+    // Checks collision against ALL detected hands
     function checkCollision(targetX, targetY, radius) {
-      if (predictions.length > 0) {
-        // Use the tip of the index finger for interactions
-        let indexTip = predictions[0].annotations.indexFinger[3]; 
-        let hx = indexTip[0]; let hy = indexTip[1];
-        return dist(hx, hy, targetX, targetY) < radius + 20; // 20 is the hit buffer
+      for (let k = 0; k < predictions.length; k++) {
+        // We use the index finger tip, but could easily expand to whole hand
+        let indexTip = predictions[k].annotations.indexFinger[3]; 
+        if (dist(indexTip[0], indexTip[1], targetX, targetY) < radius + 25) return true;
       }
       return false;
+    }
+
+    function updateScore(pts) { score += pts; document.getElementById('score').innerText = score; }
+    function updateLevelUI(lvl, text) {
+      document.getElementById('level-display').innerText = lvl;
+      document.getElementById('instructions').innerText = text;
     }
   </script>
 </body>
