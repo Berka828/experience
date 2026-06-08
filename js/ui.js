@@ -7,8 +7,8 @@ const textDict = {
     title: "Bronx Explorer 🌱",
     lvl1: "Level 1: Wave your arms slowly to clear the smog.",
     lvl2: "Level 2: Grab the pollution to clean the river.",
-    lvl3: "Level 3: Touch the clouds to water the seeds.",
-    lvl4: "Level 4: Kick to bounce! Point to pop!",
+    lvl3: "Level 3: Touch the clouds to water. Play with the butterflies!",
+    lvl4: "Level 4: Pop the RED bubbles! Bounce the rest gently.",
     win: "🎉 Beautiful job! Thank you! 🎉",
     lvlText: "Level:", btn: "Español"
   },
@@ -16,8 +16,8 @@ const textDict = {
     title: "Explorador 🌱",
     lvl1: "Nivel 1: Agita tus brazos para limpiar el smog.",
     lvl2: "Nivel 2: Agarra la contaminación del río.",
-    lvl3: "Nivel 3: Toca las nubes para regar.",
-    lvl4: "Nivel 4: ¡Patea para rebotar! ¡Señala para explotar!",
+    lvl3: "Nivel 3: Toca las nubes. ¡Juega con las mariposas!",
+    lvl4: "Nivel 4: ¡Explota las rojas! Rebota las demás suavemente.",
     win: "🎉 ¡Hermoso trabajo! ¡Gracias! 🎉",
     lvlText: "Nivel:", btn: "English"
   }
@@ -50,7 +50,6 @@ function toggleSettings() {
   panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
 }
 
-// FULLSCREEN TOGGLE
 function keyPressed() { 
   if (key === 'f' || key === 'F') {
     let fs = fullscreen();
