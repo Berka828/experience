@@ -5,13 +5,10 @@ function setup() {
   let canvas = createCanvas(windowWidth, windowHeight);
   canvas.position(0, 0);
   
-  // Set up Webcam with explicit dimensions to prevent AI freezing
   video = createCapture(VIDEO, () => { 
-    video.elt.width = 640;  // Force intrinsic width for MediaPipe
-    video.elt.height = 480; // Force intrinsic height for MediaPipe
+    video.elt.width = 640;  
+    video.elt.height = 480; 
     videoReady = true; 
-    
-    // Start tracking loop ONLY after the camera is fully physically ready
     startMediaPipeTracker(video);
   });
   video.hide(); 
@@ -32,15 +29,18 @@ function draw() {
   
   background(skyColor[0], skyColor[1], skyColor[2], 120); 
 
-  drawFaceMasks(); 
+  drawFaceMasks(); // Draw AR masks behind the game UI but over the player
 
   if (currentScene === 1) drawScene1();
   else if (currentScene === 2) drawScene2();
   else if (currentScene === 3) drawScene3();
   else if (currentScene === 4) drawScene4(); 
   else if (currentScene === 5) {
-    textSize(40); textAlign(CENTER); fill(255);
-    text("📸 Say Cheese!", width/2, 100);
+    // Win Screen Celebration!
+    if (frameCount % 10 === 0) {
+      // Spawn random fireworks across the screen
+      spawnExplosion(random(width), random(height), [random(255), random(255), random(255)]);
+    }
   }
 
   drawSkeletonsAndInteractions();
@@ -56,7 +56,6 @@ function windowResized() {
 }
 
 function resetGame() {
-  document.getElementById('qr-container').style.display = 'none';
   currentScene = 1;
   score = 0; updateScore(); updateUI();
   initScene1();
