@@ -5,38 +5,40 @@ function setup() {
   let canvas = createCanvas(windowWidth, windowHeight);
   canvas.position(0, 0);
   
-  // Setup Webcam
-  video = createCapture(VIDEO, () => {
-    videoReady = true; // Wait until camera is physically on
-  });
+  video = createCapture(VIDEO, () => { videoReady = true; });
   video.hide(); 
 
-  // Initialize ML5 Tracking (from tracking.js)
-  setupTracking(video);
-
-  initScene1();
+  fetchLiveWeather(); // Fetch Bronx Weather from API
+  setupTracking(video); // Init AI
+  updateUI(); // Init Dictionary
+  initScene1(); // Start Smog Level
 }
 
 function draw() {
-  // Draw the camera feed stretched to fill the screen
+  if (!videoReady) return;
+
   push();
-  translate(width, 0);
-  scale(-1, 1);
-  image(video, 0, 0, width, height);
+  translate(width, 0); scale(-1, 1);
+  image(video, 0, 0, width, height); // Mirror Camera
   pop();
   
-  background(255, 255, 255, 40); // Light contrast overlay
-
-  if (!videoReady) return; // Don't draw game until camera is ready
+  // Dynamic Weather Overlay
+  background(skyColor[0], skyColor[1], skyColor[2], 120); 
 
   drawFaceMasks(); 
 
+  // Render Current Level
   if (currentScene === 1) drawScene1();
   else if (currentScene === 2) drawScene2();
   else if (currentScene === 3) drawScene3();
+  else if (currentScene === 4) {
+    // Win Screen - Freeze frame for Photo
+    textSize(40); textAlign(CENTER); fill(255);
+    text("📸 Say Cheese!", width/2, 100);
+  }
 
-  // Draw Skeletons & Check Interactions
   drawSkeletonsAndInteractions();
+  drawParticles(); // Render Physics Explosions
 }
 
 function windowResized() {
@@ -44,4 +46,11 @@ function windowResized() {
   if (currentScene === 1) initScene1();
   if (currentScene === 2) initScene2();
   if (currentScene === 3) initScene3();
+}
+
+function resetGame() {
+  document.getElementById('qr-container').style.display = 'none';
+  currentScene = 1;
+  score = 0; updateScore(); updateUI();
+  initScene1();
 }
