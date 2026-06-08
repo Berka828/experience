@@ -4,15 +4,17 @@ let facePredictions = [];
 let prevHandPositions = [];
 let handVelocity = 0;
 
+// Player zones (Left = Cyan, Center = Magenta, Right = Yellow)
 let playerColors = [
-  [0, 255, 255],   // Player 1: Cyan pair
-  [255, 0, 255],   // Player 2: Magenta pair
-  [255, 255, 0],   // Player 3: Yellow pair
-  [50, 255, 50]    // Player 4: Lime pair
+  [0, 255, 255],   
+  [255, 0, 255],   
+  [255, 255, 0]    
 ];
 
+let animalMasks = ['🐟 Alewife', '🦩 Heron', '🐢 Turtle', '🐸 Frog'];
+
 function setupTracking(videoElement) {
-  // 1. Initialize MediaPipe Hands
+  // Initialize MediaPipe Hands
   mpHands = new Hands({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
   });
@@ -20,25 +22,30 @@ function setupTracking(videoElement) {
   mpHands.setOptions({
     maxNumHands: 6,
     modelComplexity: 1,
-    minDetectionConfidence: 0.6,
-    minTrackingConfidence: 0.6
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
   });
 
   mpHands.onResults(onHandResults);
 
-  // Hook camera utilities to stream video frames to MediaPipe
-  const camera = new Camera(videoElement.elt, {
-    onFrame: async () => {
-      await mpHands.send({ image: videoElement.elt });
-    },
-    width: 640,
-    height: 480
-  });
-  camera.start();
-
-  // 2. Initialize Facemesh for AR Masks
+  // Initialize FaceMesh
   facemesh = ml5.facemesh(videoElement, () => console.log('Face ready!'));
   facemesh.on('predict', results => facePredictions = results);
+}
+
+// THIS PREVENTS FREEZING: Custom manual loop instead of camera_utils
+async function startMediaPipeTracker(videoElement) {
+  async function processFrame() {
+    if (videoElement.elt.readyState >= 2) {
+      try {
+        await mpHands.send({ image: videoElement.elt });
+      } catch (e) {
+        console.error("Tracking frame dropped:", e);
+      }
+    }
+    requestAnimationFrame(processFrame); // Loop forever safely
+  }
+  processFrame();
 }
 
 function onHandResults(results) {
@@ -49,90 +56,78 @@ function drawSkeletonsAndInteractions() {
   if (trackedHandsData.length === 0) return;
 
   handVelocity = 0;
-  let mappedHands = [];
+  
+  // Create 3 invisible zones for kids to stand in
+  let zoneWidth = width / 3;
 
-  // Map all coordinates tightly to screen size
   for (let k = 0; k < trackedHandsData.length; k++) {
     let landmarks = trackedHandsData[k];
+    
+    // Map raw AI coordinates tightly to the screen size
     let mappedLm = landmarks.map(lm => {
       let mx = map(lm.x, 0, 1, 0, width);
       let my = map(lm.y, 0, 1, 0, height);
       return [width - mx, my]; // Mirror X axis
     });
-    mappedHands.push(mappedLm);
-  }
 
-  // PAIRING ALGORITHM: Cluster hands into players based on screen proximity
-  let playerAssignments = [];
-  for (let i = 0; i < mappedHands.length; i++) {
-    let assigned = false;
-    let handCenter = mappedHands[i][9]; // Palm middle
+    let palmCenter = mappedLm[9]; // Middle of the hand
 
-    for (let j = 0; j < i; j++) {
-      let otherCenter = mappedHands[j][9];
-      // If two hands are within 350 pixels of each other, they are a pair!
-      if (dist(handCenter[0], handCenter[1], otherCenter[0], otherCenter[1]) < 350) {
-        playerAssignments[i] = playerAssignments[j]; // Assign same player ID
-        assigned = true;
-        break;
-      }
-    }
-    if (!assigned) {
-      // Find the next available player ID
-      let usedIds = playerAssignments.slice(0, i);
-      let nextId = 0;
-      while (usedIds.includes(nextId)) { nextId++; }
-      playerAssignments[i] = nextId;
-    }
-  }
+    // 1. ZONE-BASED PAIRING (Solves the mismatched colors!)
+    // Which third of the screen is the hand in?
+    let playerIndex = Math.floor(palmCenter[0] / zoneWidth);
+    playerIndex = constrain(playerIndex, 0, 2); // Ensure it's 0, 1, or 2
+    let pColor = playerColors[playerIndex];
 
-  // Draw and process interactions for all clustered pairs
-  for (let k = 0; k < mappedHands.length; k++) {
-    let landmarks = mappedHands[k];
-    let playerId = playerAssignments[k] % playerColors.length;
-    let pColor = playerColors[playerId];
-
-    // Draw lines between bones
+    // 2. DRAW SKELETON
     stroke(pColor[0], pColor[1], pColor[2], 180);
-    strokeWeight(4);
+    strokeWeight(5);
     noFill();
-    // Simple hand drawing loop
+    
+    // Draw bones
     beginShape();
-    for (let j = 0; j < 21; j++) {
-      vertex(landmarks[j][0], landmarks[j][1]);
-    }
+    for (let j = 0; j < 21; j++) { vertex(mappedLm[j][0], mappedLm[j][1]); }
     endShape();
 
     // Draw joints
     for (let j = 0; j < 21; j++) {
       fill(255); stroke(pColor[0], pColor[1], pColor[2]); strokeWeight(2);
-      circle(landmarks[j][0], landmarks[j][1], 10);
+      circle(mappedLm[j][0], mappedLm[j][1], 10);
     }
 
-    // Velocity / Swiping calculation
-    let indexTip = landmarks[8];
+    // 3. VELOCITY CALCULATION
+    let indexTip = mappedLm[8];
     if (prevHandPositions[k]) {
       let d = dist(indexTip[0], indexTip[1], prevHandPositions[k][0], prevHandPositions[k][1]);
       handVelocity += d;
     }
     prevHandPositions[k] = indexTip;
 
-    // Grab Logic
-    let wrist = landmarks[0];
-    let indexBase = landmarks[5];
-    let palmCenter = landmarks[9];
+    // 4. GRAB VS. POINT LOGIC
+    let wrist = mappedLm[0];
+    let indexBase = mappedLm[5];
+    let middleTip = mappedLm[12];
+    
     let palmSize = dist(wrist[0], wrist[1], indexBase[0], indexBase[1]);
     let indexExt = dist(wrist[0], wrist[1], indexTip[0], indexTip[1]);
+    let middleExt = dist(wrist[0], wrist[1], middleTip[0], middleTip[1]);
 
-    let isGrabbing = (indexExt < palmSize * 1.5);
+    // If both index and middle fingers are pulled back toward wrist, it's a GRAB
+    let isGrabbing = (indexExt < palmSize * 1.5 && middleExt < palmSize * 1.5);
 
     if (isGrabbing) {
-      fill(255, 255, 255, 200); circle(palmCenter[0], palmCenter[1], 40); 
+      // Visual feedback: Glowing Palm
+      fill(255, 255, 255, 200); 
+      circle(palmCenter[0], palmCenter[1], 50); 
+      
       if (currentScene === 2) {
         let holdingSomething = false;
+        // Keep holding the item we already grabbed
         for (let t of trashItems) {
-          if (t.active && t.draggedBy === k) { t.x = palmCenter[0]; t.y = palmCenter[1]; holdingSomething = true; }
+          if (t.active && t.draggedBy === k) { 
+            t.x = palmCenter[0]; t.y = palmCenter[1]; holdingSomething = true; 
+          }
         }
+        // Grab a new item if we aren't holding one
         if (!holdingSomething) {
           for (let t of trashItems) {
             if (t.active && !t.draggedBy && dist(palmCenter[0], palmCenter[1], t.x, t.y) < t.radius * 2.5) {
@@ -142,6 +137,11 @@ function drawSkeletonsAndInteractions() {
         }
       }
     } else {
+      // Visual feedback: Glowing Pointer on finger
+      fill(255); stroke(pColor[0], pColor[1], pColor[2]); strokeWeight(4);
+      circle(indexTip[0], indexTip[1], 20);
+
+      // Release grabbed items
       if (currentScene === 2) {
         for (let t of trashItems) if (t.draggedBy === k) t.draggedBy = null;
       }
