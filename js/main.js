@@ -1,12 +1,14 @@
 let video;
 
 function setup() {
-  let canvas = createCanvas(900, 650);
+  // Create a canvas that fills the browser viewport
+  let canvas = createCanvas(windowWidth, windowHeight);
+  canvas.position(0, 0);
   
-  // Set up Webcam
+  // Set up the webcam feed to fill the canvas bounds
   video = createCapture(VIDEO);
   video.size(width, height);
-  video.hide(); // Hide raw DOM video, we draw it manually in draw()
+  video.hide(); 
 
   // Initialize ML5 Tracking (from tracking.js)
   setupTracking(video);
@@ -16,16 +18,20 @@ function setup() {
 }
 
 function draw() {
-  // 1. Draw Webcam Feed First
+  // Programmatically mirror the camera feed to match the coordinate space
+  push();
+  translate(width, 0);
+  scale(-1, 1);
   image(video, 0, 0, width, height);
+  pop();
   
-  // 2. Add light overlay for visibility
+  // Light white tint overlay for modern, high-contrast look
   background(255, 255, 255, 40);
 
-  // 3. Draw AR Masks (from tracking.js)
+  // Render Face Masks (from tracking.js)
   drawFaceMasks(); 
 
-  // 4. Render Current Scene (from scenes.js)
+  // Render Current Level (from scenes.js)
   if (currentScene === 1) {
     drawScene1();
   } else if (currentScene === 2) {
@@ -34,6 +40,17 @@ function draw() {
     drawScene3();
   }
 
-  // 5. Draw Player Skeletons & Check Collisions last so they render on top
+  // Draw Skeletons & Check Collisions last
   drawSkeletonsAndInteractions();
+}
+
+// Adjusts the canvas scale instantly if the museum window/browser changes size
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  video.size(width, height);
+  
+  // Re-initialize layouts to match new screen boundary coordinates
+  if (currentScene === 1) initScene1();
+  if (currentScene === 2) initScene2();
+  if (currentScene === 3) initScene3();
 }
