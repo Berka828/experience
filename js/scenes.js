@@ -4,10 +4,15 @@ let smogCleared = 0;
 let trashItems = [];
 let clouds = []; let raindrops = []; let flowers = [];
 
+// Level 4: Rainbow Pops
+let popBubbles = [];
+let bubbleAnimals = ['🐟', '🐢', '🦫', '🐸', '🦉', '🦊'];
+let bubblesPopped = 0;
+let sunSize = 120;
+
 function initScene1() {
-  // Create a digital canvas of gray smog
   smogGraphics = createGraphics(width, height);
-  smogGraphics.background(150, 150, 150, 240); // Thick gray smog
+  smogGraphics.background(150, 150, 150, 240); 
   smogCleared = 0;
 }
 
@@ -30,24 +35,41 @@ function initScene3() {
   raindrops = []; flowers = [];
 }
 
+function initScene4() {
+  popBubbles = [];
+  bubblesPopped = 0;
+  for(let i = 0; i < 6; i++) {
+    spawnBubble();
+  }
+}
+
+function spawnBubble() {
+  popBubbles.push({
+    x: random(100, width - 100),
+    y: height + random(50, 200),
+    radius: 40,
+    speed: random(2, 5),
+    animal: random(bubbleAnimals),
+    color: [random(100, 255), random(100, 255), random(100, 255)],
+    active: true
+  });
+}
+
 function drawScene1() {
-  // If hands are waving fast (velocity > 30), erase the smog!
   if (handVelocity > 30) {
     smogGraphics.erase();
-    for(let k=0; k < handPredictions.length; k++){
-      let lm = handPredictions[k].landmarks[8];
-      let vw = video.width || 640; let vh = video.height || 480;
-      let x = width - map(lm[0], 0, vw, 0, width);
-      let y = map(lm[1], 0, vh, 0, height);
-      smogGraphics.circle(x, y, 150); // Big eraser brush
-      smogCleared += 1;
+    for (let k = 0; k < trackedHandsData.length; k++) {
+      let rawTip = trackedHandsData[k][8];
+      let x = width - map(rawTip.x, 0, 1, 0, width);
+      let y = map(rawTip.y, 0, 1, 0, height);
+      smogGraphics.circle(x, y, 160);
+      smogCleared += 1.5;
     }
     smogGraphics.noErase();
   }
-  image(smogGraphics, 0, 0); // Draw smog over screen
+  image(smogGraphics, 0, 0);
 
-  // If they waved enough, move to level 2!
-  if (smogCleared > 150) { currentScene = 2; updateUI(); initScene2(); }
+  if (smogCleared > 200) { currentScene = 2; updateUI(); initScene2(); }
 }
 
 function drawScene2() {
@@ -59,10 +81,9 @@ function drawScene2() {
       activeCount++;
       fill(220, 50, 50, 200); noStroke(); circle(t.x, t.y, t.radius * 2);
       
-      // If thrown into the sky
       if (t.y < height/2 && t.draggedBy !== null) {
         t.active = false; t.draggedBy = null; score += 20; updateScore();
-        spawnExplosion(t.x, t.y, [220, 50, 50]); // Particle Explosion!
+        spawnExplosion(t.x, t.y, [220, 50, 50]); 
       }
     }
   }
@@ -72,7 +93,6 @@ function drawScene2() {
 function drawScene3() {
   noStroke(); fill(101, 67, 33, 150); rect(0, height - 150, width, 150);
 
-  // Wand can water plants too!
   let wandLoc = trackGreenProp(); 
 
   for (let c of clouds) {
@@ -80,17 +100,14 @@ function drawScene3() {
     ellipse(c.x, c.y, c.w, c.h); ellipse(c.x-30, c.y+10, c.w*.7, c.h*.8); ellipse(c.x+30, c.y+10, c.w*.7, c.h*.8);
 
     let isTouched = false;
-    // Check hands
-    for(let k=0; k<handPredictions.length; k++){
-       let vw = video.width||640; let vh = video.height||480;
-       let lm = handPredictions[k].landmarks[8];
-       let x = width - map(lm[0], 0, vw, 0, width); let y = map(lm[1], 0, vh, 0, height);
+    for(let k=0; k<trackedHandsData.length; k++){
+       let rawTip = trackedHandsData[k][8];
+       let x = width - map(rawTip.x, 0, 1, 0, width);
+       let y = map(rawTip.y, 0, 1, 0, height);
        if(dist(x,y,c.x,c.y) < c.w/2) isTouched = true;
     }
-    // Check physical Wand
     if (wandLoc && dist(wandLoc.x, wandLoc.y, c.x, c.y) < c.w/2) isTouched = true;
     
-    // Auto rain if it's actually raining in the Bronx!
     if (isTouched || isRainingInBronx) {
       if (frameCount % 6 === 0) raindrops.push({ x: c.x + random(-30,30), y: c.y + 30, active: true });
     }
@@ -114,8 +131,82 @@ function drawScene3() {
   }
 
   if (grownFlowers >= 15) { 
-    currentScene = 4; updateUI(); 
-    updateGlobalLeaderboard(15); // Add to Daily Impact!
-    setTimeout(generateMemoryQR, 2000); // Wait 2 secs, then show photo QR
+    currentScene = 4; updateUI(); initScene4();
+  }
+}
+
+// --- NEW LEVEL 4: RAINBOWS AND ANIMAL BUBBLES ---
+function drawScene4() {
+  // 1. Draw a Gorgeous Procedural Rainbow across the sky
+  noFill();
+  let colors = [
+    [255, 0, 0, 150],     // Red
+    [255, 127, 0, 150],   // Orange
+    [255, 255, 0, 150],   // Yellow
+    [0, 255, 0, 150],     // Green
+    [0, 0, 255, 150],     // Blue
+    [75, 0, 130, 150],    // Indigo
+    [148, 0, 211, 150]    // Violet
+  ];
+  strokeWeight(15);
+  for (let i = 0; i < colors.length; i++) {
+    stroke(colors[i][0], colors[i][1], colors[i][2], colors[i][3]);
+    arc(width / 2, height, 700 - (i * 30), 700 - (i * 30), PI, TWO_PI);
+  }
+
+  // 2. Draw the Glowing Sun
+  noStroke();
+  fill(255, 200, 0, 180);
+  circle(width - 100, 100, sunSize);
+  fill(255, 255, 0, 225);
+  circle(width - 100, 100, sunSize - 20);
+
+  // Pulse the sun gently
+  sunSize = 120 + sin(frameCount * 0.05) * 10;
+
+  // 3. Render and Update Animal Bubbles
+  for (let i = popBubbles.length - 1; i >= 0; i--) {
+    let b = popBubbles[i];
+    if (b.active) {
+      b.y -= b.speed; // Float upwards
+
+      // Draw bubble
+      stroke(255, 255, 255, 180);
+      strokeWeight(2);
+      fill(b.color[0], b.color[1], b.color[2], 120);
+      circle(b.x, b.y, b.radius * 2);
+
+      // Draw animal emoji inside the bubble
+      noStroke();
+      textAlign(CENTER, CENTER);
+      textSize(32);
+      text(b.animal, b.x, b.y);
+
+      // 4. Hit Detection (Swatting/Popping)
+      if (checkHover(b.x, b.y, b.radius)) {
+        b.active = false;
+        bubblesPopped++;
+        score += 50;
+        updateScore();
+
+        // Explosion gets the color of the popped bubble!
+        spawnExplosion(b.x, b.y, b.color);
+        setTimeout(spawnBubble, 1000); // Spawn next bubble
+      }
+
+      // If bubble floats off screen, reset it at bottom
+      if (b.y < -100) {
+        popBubbles.splice(i, 1);
+        spawnBubble();
+      }
+    }
+  }
+
+  // Once they pop 15 animals, they win!
+  if (bubblesPopped >= 15) {
+    currentScene = 5; 
+    updateUI(); 
+    updateGlobalLeaderboard(15); 
+    setTimeout(generateMemoryQR, 2000); 
   }
 }
