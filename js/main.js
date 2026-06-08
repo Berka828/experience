@@ -29,22 +29,23 @@ function draw() {
   
   background(skyColor[0], skyColor[1], skyColor[2], 120); 
 
-  drawFaceMasks(); // Draw AR masks behind the game UI but over the player
-
   if (currentScene === 1) drawScene1();
   else if (currentScene === 2) drawScene2();
   else if (currentScene === 3) drawScene3();
   else if (currentScene === 4) drawScene4(); 
   else if (currentScene === 5) {
-    // Win Screen Celebration!
-    if (frameCount % 10 === 0) {
-      // Spawn random fireworks across the screen
-      spawnExplosion(random(width), random(height), [random(255), random(255), random(255)]);
+    // Gentle Celebration
+    if (frameCount % 20 === 0 && !document.getElementById('calm-mode').checked) {
+      spawnExplosion(random(width), random(height), [random(150, 255), random(150, 255), random(255)]);
     }
   }
 
   drawSkeletonsAndInteractions();
-  drawParticles(); 
+  
+  // Render particles unless Calm Mode is checked
+  if(!document.getElementById('calm-mode').checked) {
+    drawParticles(); 
+  }
 }
 
 function windowResized() {
