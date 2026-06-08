@@ -3,23 +3,32 @@ body {
   padding: 0; 
   background-color: #1a1a2e;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  display: flex; 
-  flex-direction: column; 
-  align-items: center; 
-  justify-content: center; 
-  height: 100vh; 
   overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+}
+
+canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1; /* Sits behind the HTML UI */
 }
 
 #ui-container {
   position: absolute; 
   top: 20px; 
+  left: 50%;
+  transform: translateX(-50%);
   text-align: center;
   background: rgba(255, 255, 255, 0.95); 
   padding: 15px 30px;
   border-radius: 20px; 
   box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
   z-index: 10;
+  pointer-events: none; /* Allows kids to touch through the UI box if items spawn behind it */
 }
 
 h1 { 
@@ -32,12 +41,6 @@ p {
   margin: 5px 0 0 0; 
   color: #444; 
   font-weight: bold; 
-}
-
-canvas {
-  border-radius: 16px; 
-  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
-  transform: scaleX(-1); /* Mirrors the webcam for intuitive movement */
 }
 
 #popup {
