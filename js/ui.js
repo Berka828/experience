@@ -1,43 +1,33 @@
 let currentScene = 1;
 let score = 0;
 let isEnglish = true;
-let globalFlowers = localStorage.getItem('bxcm_flowers') || 0;
 
 const textDict = {
   EN: {
-    title: "Bronx Explorer 🌍",
-    lvl1: "Level 1: WAVE YOUR ARMS fast to clear the urban smog!",
-    lvl2: "Level 2: GRAB the pollution and throw it away!",
-    lvl3: "Level 3: TEAM UP! Touch the clouds to water the seeds!",
-    lvl4: "Level 4: RAINBOW POP! Swat and KICK the floating animals!",
-    win: "🎉 YOU SAVED THE BRONX! GREAT JOB! 🎉",
-    lvlText: "Level:", scoreText: "Team Score:", btn: "Switch to Español"
+    title: "Bronx Explorer 🌱",
+    lvl1: "Level 1: Wave your arms slowly to clear the smog.",
+    lvl2: "Level 2: Grab the pollution to clean the river.",
+    lvl3: "Level 3: Touch the clouds to water the seeds.",
+    lvl4: "Level 4: Kick to bounce! Point to pop!",
+    win: "🎉 Beautiful job! Thank you! 🎉",
+    lvlText: "Level:", btn: "Español"
   },
   ES: {
-    title: "Explorador del Bronx 🌍",
-    lvl1: "Nivel 1: ¡AGITA TUS BRAZOS para limpiar el smog!",
-    lvl2: "Nivel 2: ¡AGARRA la contaminación y tírala!",
-    lvl3: "Nivel 3: ¡EQUIPO! ¡Toca las nubes para regar!",
-    lvl4: "Nivel 4: ¡POP ARCOÍRIS! ¡Golpea y PATEA los animales!",
-    win: "🎉 ¡SALVASTE EL BRONX! ¡BUEN TRABAJO! 🎉",
-    lvlText: "Nivel:", scoreText: "Puntaje de Equipo:", btn: "Cambiar a English"
+    title: "Explorador 🌱",
+    lvl1: "Nivel 1: Agita tus brazos para limpiar el smog.",
+    lvl2: "Nivel 2: Agarra la contaminación del río.",
+    lvl3: "Nivel 3: Toca las nubes para regar.",
+    lvl4: "Nivel 4: ¡Patea para rebotar! ¡Señala para explotar!",
+    win: "🎉 ¡Hermoso trabajo! ¡Gracias! 🎉",
+    lvlText: "Nivel:", btn: "English"
   }
 };
 
-function updateScore() { 
-  document.getElementById('score').innerText = score; 
-}
-
-function updateGlobalLeaderboard(flowersToAdd) {
-  globalFlowers = parseInt(globalFlowers) + flowersToAdd;
-  localStorage.setItem('bxcm_flowers', globalFlowers);
-  document.getElementById('global-score').innerText = globalFlowers;
-}
+function updateScore() { document.getElementById('score').innerText = score; }
 
 function updateUI() {
   let lang = isEnglish ? textDict.EN : textDict.ES;
   document.getElementById('level-display').innerText = currentScene;
-  document.getElementById('global-score').innerText = globalFlowers;
   
   if (currentScene === 1) document.getElementById('instructions').innerText = lang.lvl1;
   if (currentScene === 2) document.getElementById('instructions').innerText = lang.lvl2;
@@ -51,9 +41,19 @@ function toggleLanguage() {
   let lang = isEnglish ? textDict.EN : textDict.ES;
   document.getElementById('title-text').innerText = lang.title;
   document.getElementById('level-text').innerText = lang.lvlText;
-  document.getElementById('score-text').innerText = lang.scoreText;
-  document.getElementById('lang-btn').innerText = lang.btn + " (Spacebar)";
+  document.getElementById('lang-btn').innerText = lang.btn;
   updateUI();
 }
 
-function keyPressed() { if (key === ' ') toggleLanguage(); }
+function toggleSettings() {
+  let panel = document.getElementById('settings-panel');
+  panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
+}
+
+// FULLSCREEN TOGGLE
+function keyPressed() { 
+  if (key === 'f' || key === 'F') {
+    let fs = fullscreen();
+    fullscreen(!fs);
+  }
+}
