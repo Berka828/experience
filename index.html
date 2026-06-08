@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Bronx Children's Museum - The Ultimate Explorer</title>
+  <title>Bronx Children's Museum - Sensory Explorer</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
@@ -13,14 +13,27 @@
 </head>
 <body>
 
+  <!-- Minimized UI Overlay -->
   <div id="ui-container">
-    <h1 id="title-text">Bronx Explorer 🌍</h1>
-    <p id="leaderboard">Global Impact: <strong id="global-score">0</strong> Flowers Planted Today!</p>
-    <p id="instructions">Level 1: Wave your arms fast to clear the Bronx smog!</p>
-    <p><span id="level-text">Level:</span> <span id="level-display">1</span> | <span id="score-text">Team Score:</span> <strong id="score">0</strong></p>
+    <h1 id="title-text">Bronx Explorer 🌱</h1>
+    <p id="instructions">Level 1: Wave your arms slowly to clear the smog.</p>
+    <p><span id="level-text">Level:</span> <span id="level-display">1</span> | Score: <strong id="score">0</strong></p>
   </div>
 
-  <button id="lang-btn" onclick="toggleLanguage()">Switch to Español (Spacebar)</button>
+  <!-- Bottom Controls -->
+  <div id="controls">
+    <button onclick="toggleSettings()">⚙️ Settings</button>
+    <button id="lang-btn" onclick="toggleLanguage()">Español</button>
+  </div>
+
+  <!-- Customization Panel (Hidden by default) -->
+  <div id="settings-panel">
+    <h3>Sensory Settings</h3>
+    <label>Bubble Size: <input type="range" id="bubble-size" min="30" max="80" value="45"></label><br><br>
+    <label>Calm Mode (Fewer Particles): <input type="checkbox" id="calm-mode"></label><br><br>
+    <p><em>Press 'F' on keyboard for Fullscreen</em></p>
+    <button onclick="toggleSettings()">Close</button>
+  </div>
 
   <script src="js/ui.js"></script>
   <script src="js/api.js"></script>
