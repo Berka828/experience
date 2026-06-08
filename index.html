@@ -3,20 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <title>Bronx Children's Museum - The Ultimate Explorer</title>
-  <!-- Libraries -->
+  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
-  
-  <!-- MediaPipe Hands SDK (Crucial for robust multi-hand tracking) -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- UI Overlay -->
   <div id="ui-container">
     <h1 id="title-text">Bronx Explorer 🌍</h1>
     <p id="leaderboard">Global Impact: <strong id="global-score">0</strong> Flowers Planted Today!</p>
@@ -26,14 +22,6 @@
 
   <button id="lang-btn" onclick="toggleLanguage()">Switch to Español (Spacebar)</button>
 
-  <!-- QR Code Container for the end of the game -->
-  <div id="qr-container">
-    <h3 id="qr-text">Scan to save your photo!</h3>
-    <div id="qrcode"></div>
-    <button onclick="resetGame()" style="margin-top:10px; padding:10px; cursor:pointer;">New Game</button>
-  </div>
-
-  <!-- Custom Game Scripts (Order matters!) -->
   <script src="js/ui.js"></script>
   <script src="js/api.js"></script>
   <script src="js/particles.js"></script>
