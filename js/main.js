@@ -5,11 +5,19 @@ function setup() {
   let canvas = createCanvas(windowWidth, windowHeight);
   canvas.position(0, 0);
   
-  video = createCapture(VIDEO, () => { videoReady = true; });
+  // Set up Webcam with explicit dimensions to prevent AI freezing
+  video = createCapture(VIDEO, () => { 
+    video.elt.width = 640;  // Force intrinsic width for MediaPipe
+    video.elt.height = 480; // Force intrinsic height for MediaPipe
+    videoReady = true; 
+    
+    // Start tracking loop ONLY after the camera is fully physically ready
+    startMediaPipeTracker(video);
+  });
   video.hide(); 
 
-  fetchLiveWeather(); // Fetch live Bronx weather
-  setupTracking(video); // Init MediaPipe Hands & ml5 FaceMesh
+  fetchLiveWeather(); 
+  setupTracking(video); 
   updateUI(); 
   initScene1(); 
 }
@@ -17,24 +25,20 @@ function setup() {
 function draw() {
   if (!videoReady) return;
 
-  // Render mirrored camera
   push();
   translate(width, 0); scale(-1, 1);
   image(video, 0, 0, width, height); 
   pop();
   
-  // Dynamic Weather Overlay
   background(skyColor[0], skyColor[1], skyColor[2], 120); 
 
   drawFaceMasks(); 
 
-  // Level Renderer
   if (currentScene === 1) drawScene1();
   else if (currentScene === 2) drawScene2();
   else if (currentScene === 3) drawScene3();
-  else if (currentScene === 4) drawScene4(); // New Level 4!
+  else if (currentScene === 4) drawScene4(); 
   else if (currentScene === 5) {
-    // Win Screen / Capture Camera
     textSize(40); textAlign(CENTER); fill(255);
     text("📸 Say Cheese!", width/2, 100);
   }
