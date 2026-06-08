@@ -1,29 +1,26 @@
-// Game State Globals (Accessible across all files)
 let currentScene = 1;
 let score = 0;
 let isEnglish = true;
+let globalFlowers = localStorage.getItem('bxcm_flowers') || 0;
 
-// Bilingual Dictionary
 const textDict = {
   EN: {
     title: "Bronx Explorer 🌍",
-    lvl1: "Level 1: PINCH the red pollution and drag it up to clean the River!",
-    lvl2: "Level 2: Team up! Touch the clouds to water the seeds!",
-    lvl3: "Level 3: The Bronx Beats! Play the instruments together!",
-    lvlText: "Level:", 
-    scoreText: "Team Score:",
-    btn: "Switch to Español (Spacebar)",
-    win: "🎉 YOU SAVED THE BRONX!"
+    lvl1: "Level 1: WAVE YOUR ARMS fast to clear the urban smog!",
+    lvl2: "Level 2: GRAB the pollution and throw it away!",
+    lvl3: "Level 3: TEAM UP! Touch the clouds to water the seeds!",
+    win: "🎉 YOU SAVED THE BRONX! SMILE FOR THE CAMERA! 📸",
+    lvlText: "Level:", scoreText: "Team Score:", btn: "Switch to Español",
+    qr: "Scan to download your Explorer Photo!"
   },
   ES: {
     title: "Explorador del Bronx 🌍",
-    lvl1: "Nivel 1: ¡PELLIZCA la contaminación roja y arrástrala hacia arriba!",
-    lvl2: "Nivel 2: ¡Trabajo en equipo! ¡Toca las nubes para regar las semillas!",
-    lvl3: "Nivel 3: ¡Ritmos del Bronx! ¡Toca los instrumentos juntos!",
-    lvlText: "Nivel:", 
-    scoreText: "Puntaje de Equipo:",
-    btn: "Cambiar a English (Spacebar)",
-    win: "🎉 ¡SALVASTE EL BRONX!"
+    lvl1: "Nivel 1: ¡AGITA TUS BRAZOS para limpiar el smog!",
+    lvl2: "Nivel 2: ¡AGARRA la contaminación y tírala!",
+    lvl3: "Nivel 3: ¡EQUIPO! ¡Toca las nubes para regar!",
+    win: "🎉 ¡SALVASTE EL BRONX! ¡SONRÍE! 📸",
+    lvlText: "Nivel:", scoreText: "Puntaje de Equipo:", btn: "Cambiar a English",
+    qr: "¡Escanea para descargar tu foto!"
   }
 };
 
@@ -31,9 +28,16 @@ function updateScore() {
   document.getElementById('score').innerText = score; 
 }
 
+function updateGlobalLeaderboard(flowersToAdd) {
+  globalFlowers = parseInt(globalFlowers) + flowersToAdd;
+  localStorage.setItem('bxcm_flowers', globalFlowers);
+  document.getElementById('global-score').innerText = globalFlowers;
+}
+
 function updateUI() {
   let lang = isEnglish ? textDict.EN : textDict.ES;
   document.getElementById('level-display').innerText = currentScene;
+  document.getElementById('global-score').innerText = globalFlowers;
   
   if (currentScene === 1) document.getElementById('instructions').innerText = lang.lvl1;
   if (currentScene === 2) document.getElementById('instructions').innerText = lang.lvl2;
@@ -44,18 +48,14 @@ function updateUI() {
 function toggleLanguage() {
   isEnglish = !isEnglish;
   let lang = isEnglish ? textDict.EN : textDict.ES;
-  
   document.getElementById('title-text').innerText = lang.title;
   document.getElementById('level-text').innerText = lang.lvlText;
   document.getElementById('score-text').innerText = lang.scoreText;
-  document.getElementById('lang-btn').innerText = lang.btn;
-  
+  document.getElementById('lang-btn').innerText = lang.btn + " (Spacebar)";
+  document.getElementById('qr-text').innerText = lang.qr;
   updateUI();
 }
 
-// Makey Makey / Keyboard Integration
 function keyPressed() {
-  if (key === ' ') { 
-    toggleLanguage(); 
-  }
+  if (key === ' ') toggleLanguage();
 }
