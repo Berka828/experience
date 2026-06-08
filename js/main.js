@@ -40,10 +40,16 @@ function draw() {
   else if (currentScene === 3) drawScene3();
   else if (currentScene === 4) drawScene4(); 
   else if (currentScene === 5) {
+     else if (currentScene === 5) {
     if (frameCount % 30 === 0 && !document.getElementById('calm-mode').checked) {
-      spawnExplosion(random(width), random(height), [255, 255, 255]); // Soft white bursts
+      spawnExplosion(random(width), random(height), [255, 255, 255]); 
+    }
+    // Automatically fade to reset after ~12 seconds of celebration
+    if (frameCount % 720 === 0 && fadeState === 0) {
+        triggerTransition(1);
     }
   }
+
 
   // Draw interactions
   drawSkeletonsAndInteractions();
@@ -97,5 +103,5 @@ function windowResized() {
 
 function resetGame() {
   score = 0; updateScore();
-  triggerTransition(1);
+  // Scene transitions are now handled entirely by the triggerTransition() fade engine
 }
