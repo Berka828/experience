@@ -9,6 +9,7 @@ const textDict = {
     lvl1: "Level 1: WAVE YOUR ARMS fast to clear the urban smog!",
     lvl2: "Level 2: GRAB the pollution and throw it away!",
     lvl3: "Level 3: TEAM UP! Touch the clouds to water the seeds!",
+    lvl4: "Level 4: RAINBOW POP! Swat the floating animals to make them pop!",
     win: "🎉 YOU SAVED THE BRONX! SMILE FOR THE CAMERA! 📸",
     lvlText: "Level:", scoreText: "Team Score:", btn: "Switch to Español",
     qr: "Scan to download your Explorer Photo!"
@@ -18,6 +19,7 @@ const textDict = {
     lvl1: "Nivel 1: ¡AGITA TUS BRAZOS para limpiar el smog!",
     lvl2: "Nivel 2: ¡AGARRA la contaminación y tírala!",
     lvl3: "Nivel 3: ¡EQUIPO! ¡Toca las nubes para regar!",
+    lvl4: "Nivel 4: ¡POP ARCOÍRIS! ¡Golpea los animales flotantes!",
     win: "🎉 ¡SALVASTE EL BRONX! ¡SONRÍE! 📸",
     lvlText: "Nivel:", scoreText: "Puntaje de Equipo:", btn: "Cambiar a English",
     qr: "¡Escanea para descargar tu foto!"
@@ -42,7 +44,8 @@ function updateUI() {
   if (currentScene === 1) document.getElementById('instructions').innerText = lang.lvl1;
   if (currentScene === 2) document.getElementById('instructions').innerText = lang.lvl2;
   if (currentScene === 3) document.getElementById('instructions').innerText = lang.lvl3;
-  if (currentScene === 4) document.getElementById('instructions').innerText = lang.win;
+  if (currentScene === 4) document.getElementById('instructions').innerText = lang.lvl4;
+  if (currentScene === 5) document.getElementById('instructions').innerText = lang.win;
 }
 
 function toggleLanguage() {
