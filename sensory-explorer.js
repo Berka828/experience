@@ -422,7 +422,8 @@ function drawNightSky() {
     const r = skyRings[i];
 
     noFill();
-    stroke(r.color[0], r.color[1], r.color[2], r.alpha);
+    const ringColor = r.color || [220, 230, 255];
+stroke(ringColor[0], ringColor[1], ringColor[2], r.alpha);
 strokeWeight(2);
 circle(r.x, r.y, r.radius * 2);
 
@@ -1050,41 +1051,36 @@ function drawScene3() {
 function drawScene4() {
   targetNightBlend = 1;
 
-  background(
-    lerp(20, 18, dayNightBlend),
-    lerp(10, 24, dayNightBlend),
-    lerp(40, 58, dayNightBlend),
-    115
-  );
-
+  background(18, 24, 58, 135);
   drawNightSky();
 
   const brushes = activePointers.filter(p => p.isIndexFinger);
 
   for (const brush of brushes) {
-    if (frameCount % 2 === 0 && handVelocity > 1.2) {
-      const strokeSize = random(10, 28);
+    // Easier trigger: finger presence draws, motion makes it stronger
+    const strokeSize = handVelocity > 1.2 ? random(12, 30) : random(6, 14);
 
+    if (frameCount % 2 === 0) {
       artStrokes.push({
         x: brush.x + random(-6, 6),
         y: brush.y + random(-6, 6),
         color: brush.color || [255, 255, 255],
         life: 255,
         size: strokeSize,
-        drift: random(-0.7, 0.7)
+        drift: random(-0.5, 0.5)
       });
 
       if (random() < 0.08) {
         constellationDots.push({
-          x: brush.x + random(-30, 30),
-          y: brush.y + random(-30, 30),
+          x: brush.x + random(-28, 28),
+          y: brush.y + random(-28, 28),
           size: random(4, 8),
           life: 255
         });
       }
-    }
 
-    artEnergy += 0.75;
+      artEnergy += handVelocity > 1.2 ? 0.85 : 0.35;
+    }
   }
 
   push();
@@ -1093,15 +1089,15 @@ function drawScene4() {
   for (let i = artStrokes.length - 1; i >= 0; i--) {
     const pt = artStrokes[i];
 
-    pt.life -= 1.8;
-    pt.y -= 0.45;
+    pt.life -= 1.6;
+    pt.y -= 0.35;
     pt.x += pt.drift;
 
     fill(pt.color[0], pt.color[1], pt.color[2], pt.life);
     noStroke();
     circle(pt.x, pt.y, pt.size * (pt.life / 255));
 
-    fill(255, 255, 255, pt.life * 0.55);
+    fill(255, 255, 255, pt.life * 0.45);
     circle(pt.x, pt.y, pt.size * 0.35);
 
     if (pt.life <= 0) artStrokes.splice(i, 1);
@@ -1109,23 +1105,36 @@ function drawScene4() {
 
   pop();
 
-  if (frameCount % 140 === 0) {
+  // Ambient soft rings, with color included so it does not crash
+  if (frameCount % 160 === 0) {
     skyRings.push({
       x: random(width * 0.2, width * 0.8),
       y: random(height * 0.2, height * 0.65),
       radius: 30,
-      alpha: 120
+      alpha: 90,
+      color: random([
+        [190, 220, 255],
+        [210, 190, 255],
+        [180, 255, 230],
+        [255, 230, 190]
+      ])
     });
   }
 
   const progress = constrain(artEnergy / levelSettings.level4Energy, 0, 1);
   drawProgressBar(progress);
 
-  fill(255, 255, 255, 120);
+  fill(255, 255, 255, 145);
   noStroke();
   textAlign(CENTER, CENTER);
   textSize(20);
   text("Point one finger to paint stars in the night sky", width / 2, height - 82);
+
+  if (brushes.length === 0) {
+    textSize(17);
+    fill(255, 255, 255, 110);
+    text("Hold up one hand and point toward the screen", width / 2, height - 112);
+  }
 
   if (progress >= 1) {
     beginSceneCompletion(5, "Your light drawing is becoming night...");
