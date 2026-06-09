@@ -1,6 +1,7 @@
 // Bronx Children's Museum - Sensory Explorer
-// Calm sensory exhibit version with day-to-night journey, softer transitions,
-// subtle hand/feet tracking, responsive sun/moon, flowers, bubbles, and drawing.
+// Calm sensory exhibit version with day-to-night journey,
+// smoother transitions, animated sun/moon, dynamic light drawing,
+// subtle hand/feet tracking, flowers, bubbles, and sensory effects.
 
 let video, videoReady = false, cameraError = "";
 
@@ -37,6 +38,12 @@ let activeFeet = [];
 let particles = [];
 let gentleCreatures = [];
 
+let moonPulse = 0;
+let skyRings = [];
+let shootingStars = [];
+let constellationDots = [];
+let sunBeams = [];
+
 let playerColors = [
   [0, 255, 255],
   [255, 0, 255],
@@ -69,13 +76,13 @@ let levelSettings = {
   level1Goal: 1600,
   level2Trash: 8,
   level3Flowers: 14,
-  level4Energy: 6000,
+  level4Energy: 3600,
   level5Bubbles: 24,
 
   grabAssist: 1.8,
 
-  transitionSpeed: 0.018,
-  transitionHold: 150,
+  transitionSpeed: 0.011,
+  transitionHold: 120,
 
   flowerSensitivity: 0.45,
   creatureAmount: 1,
@@ -96,7 +103,7 @@ const textDict = {
     lvl1: "Level 1: Gently wave to clear the colorful smog.",
     lvl2: "Level 2: Slowly lift the river trash away.",
     lvl3: "Level 3: Touch clouds to make rain. Help the garden grow.",
-    lvl4: "Level 4: Point one finger to draw with light.",
+    lvl4: "Level 4: Point one finger to paint stars in the night sky.",
     lvl5: "Level 5: Touch, kick, and bounce the bubbles.",
     win: "Beautiful job. Thank you.",
     lvlText: "Level:",
@@ -107,7 +114,7 @@ const textDict = {
     lvl1: "Nivel 1: Mueve tus manos suavemente para limpiar el smog.",
     lvl2: "Nivel 2: Levanta lentamente la basura del río.",
     lvl3: "Nivel 3: Toca las nubes. Ayuda al jardín a crecer.",
-    lvl4: "Nivel 4: Dibuja con un dedo de luz.",
+    lvl4: "Nivel 4: Dibuja estrellas con un dedo de luz.",
     lvl5: "Nivel 5: Toca, patea y rebota las burbujas.",
     win: "Hermoso trabajo. Gracias.",
     lvlText: "Nivel:",
@@ -249,47 +256,72 @@ function drawSky() {
 function drawSun(x, y, baseSize) {
   const touched = activePointers
     .concat(activeBouncers)
-    .some(p => dist(p.x, p.y, x, y) < baseSize * 1.35);
+    .some(p => dist(p.x, p.y, x, y) < baseSize * 1.45);
 
   if (touched) {
-    sunPulse = 20;
+    sunPulse = 34;
+
+    if (frameCount % 8 === 0) {
+      sunBeams.push({
+        x,
+        y,
+        radius: baseSize,
+        alpha: 170
+      });
+    }
+
     if (frameCount % 14 === 0 && !safeGetChecked("calm-mode")) {
-      spawnExplosion(x, y, [255, 230, 80], 6);
+      spawnExplosion(x, y, [255, 230, 80], 8);
     }
   }
 
   if (sunPulse > 0) sunPulse *= 0.92;
 
-  const size = baseSize + sin(frameCount * 0.025) * 4 + sunPulse;
+  for (let i = sunBeams.length - 1; i >= 0; i--) {
+    const beam = sunBeams[i];
+
+    noFill();
+    stroke(255, 230, 90, beam.alpha);
+    strokeWeight(4);
+    circle(beam.x, beam.y, beam.radius * 2);
+
+    beam.radius += 9;
+    beam.alpha -= 5;
+
+    if (beam.alpha <= 0) sunBeams.splice(i, 1);
+  }
+
+  const size = baseSize + sin(frameCount * 0.035) * 7 + sunPulse;
 
   push();
   translate(x, y);
+  rotate(sin(frameCount * 0.01) * 0.12);
 
-  stroke(255, 220, 60, 120);
+  stroke(255, 220, 60, 145);
   strokeWeight(5);
 
-  for (let a = 0; a < TWO_PI; a += PI / 14) {
+  for (let a = 0; a < TWO_PI; a += PI / 16) {
     const r1 = size * 0.62;
-    const r2 = size * 1.18 + sin(frameCount * 0.025 + a) * 6;
+    const r2 = size * 1.25 + sin(frameCount * 0.045 + a) * 12;
     line(cos(a) * r1, sin(a) * r1, cos(a) * r2, sin(a) * r2);
   }
 
   noStroke();
   fill(255, 215, 40, 95);
-  circle(0, 0, size * 1.8);
+  circle(0, 0, size * 1.9);
 
-  fill(255, 235, 80, 220);
+  fill(255, 235, 80, 230);
   circle(0, 0, size);
 
   if (safeGetChecked("whimsical-mode")) {
-    fill(0, 120);
+    fill(0, 130);
     arc(-18, -10, 24, 24, 0, PI);
     arc(18, -10, 24, 24, 0, PI);
 
     noFill();
-    stroke(0, 120);
+    stroke(0, 130);
     strokeWeight(3);
-    arc(0, 16, 36, 24, 0, PI);
+    arc(0, 16, 38, 26, 0, PI);
   }
 
   pop();
@@ -309,9 +341,33 @@ function drawNightSky() {
   }
 
   for (const s of stars) {
-    fill(255, 255, 255, 100 + sin(frameCount * 0.035 + s.twinkle) * 70);
+    fill(255, 255, 255, 100 + sin(frameCount * 0.04 + s.twinkle) * 80);
     noStroke();
-    circle(s.x, s.y, s.size);
+    circle(s.x, s.y, s.size + sin(frameCount * 0.06 + s.twinkle) * 0.8);
+  }
+
+  if (frameCount % 190 === 0 && currentScene >= 4) {
+    shootingStars.push({
+      x: random(width * 0.15, width * 0.8),
+      y: random(70, height * 0.35),
+      vx: random(5, 8),
+      vy: random(1.5, 3),
+      life: 255
+    });
+  }
+
+  for (let i = shootingStars.length - 1; i >= 0; i--) {
+    const st = shootingStars[i];
+
+    stroke(255, 255, 230, st.life);
+    strokeWeight(3);
+    line(st.x, st.y, st.x - 60, st.y - 18);
+
+    st.x += st.vx;
+    st.y += st.vy;
+    st.life -= 5;
+
+    if (st.life <= 0 || st.x > width + 100) shootingStars.splice(i, 1);
   }
 
   const moonX = width - 170;
@@ -319,18 +375,70 @@ function drawNightSky() {
 
   const touched = activePointers
     .concat(activeBouncers)
-    .some(p => dist(p.x, p.y, moonX, moonY) < 95);
+    .some(p => dist(p.x, p.y, moonX, moonY) < 110);
 
-  if (touched && frameCount % 14 === 0 && !safeGetChecked("calm-mode")) {
-    spawnExplosion(moonX, moonY, [220, 230, 255], 5);
+  if (touched) {
+    moonPulse = 28;
+
+    if (frameCount % 10 === 0) {
+      skyRings.push({
+        x: moonX,
+        y: moonY,
+        radius: 80,
+        alpha: 165
+      });
+
+      for (let i = 0; i < 6; i++) {
+        constellationDots.push({
+          x: moonX + random(-80, 80),
+          y: moonY + random(-80, 80),
+          size: random(3, 7),
+          life: 255
+        });
+      }
+    }
+
+    if (frameCount % 16 === 0 && !safeGetChecked("calm-mode")) {
+      spawnExplosion(moonX, moonY, [220, 230, 255], 6);
+    }
   }
+
+  if (moonPulse > 0) moonPulse *= 0.92;
+
+  for (let i = skyRings.length - 1; i >= 0; i--) {
+    const r = skyRings[i];
+
+    noFill();
+    stroke(220, 230, 255, r.alpha);
+    strokeWeight(3);
+    circle(r.x, r.y, r.radius * 2);
+
+    r.radius += 6;
+    r.alpha -= 4;
+
+    if (r.alpha <= 0) skyRings.splice(i, 1);
+  }
+
+  for (let i = constellationDots.length - 1; i >= 0; i--) {
+    const d = constellationDots[i];
+
+    fill(255, 255, 230, d.life);
+    noStroke();
+    circle(d.x, d.y, d.size);
+
+    d.life -= 2.5;
+
+    if (d.life <= 0) constellationDots.splice(i, 1);
+  }
+
+  const moonSize = 105 + sin(frameCount * 0.035) * 4 + moonPulse;
 
   noStroke();
   fill(235, 235, 220, 225);
-  circle(moonX, moonY, touched ? 118 : 105);
+  circle(moonX, moonY, moonSize);
 
   fill(skyColor[0], skyColor[1], skyColor[2]);
-  circle(moonX + 32, moonY - 14, touched ? 110 : 96);
+  circle(moonX + 32, moonY - 14, moonSize * 0.92);
 }
 
 function setupHandsTracking() {
@@ -644,6 +752,9 @@ function initScene4() {
 
   artStrokes = [];
   artEnergy = 0;
+  constellationDots = [];
+  shootingStars = [];
+  skyRings = [];
 }
 
 function initScene5() {
@@ -930,7 +1041,7 @@ function drawScene4() {
     lerp(20, 18, dayNightBlend),
     lerp(10, 24, dayNightBlend),
     lerp(40, 58, dayNightBlend),
-    135
+    115
   );
 
   drawNightSky();
@@ -938,17 +1049,29 @@ function drawScene4() {
   const brushes = activePointers.filter(p => p.isIndexFinger);
 
   for (const brush of brushes) {
-    if (frameCount % 3 === 0 && handVelocity > 1.5) {
+    if (frameCount % 2 === 0 && handVelocity > 1.2) {
+      const strokeSize = random(10, 28);
+
       artStrokes.push({
-        x: brush.x + random(-8, 8),
-        y: brush.y + random(-8, 8),
+        x: brush.x + random(-6, 6),
+        y: brush.y + random(-6, 6),
         color: brush.color || [255, 255, 255],
         life: 255,
-        size: random(8, 24)
+        size: strokeSize,
+        drift: random(-0.7, 0.7)
       });
+
+      if (random() < 0.08) {
+        constellationDots.push({
+          x: brush.x + random(-30, 30),
+          y: brush.y + random(-30, 30),
+          size: random(4, 8),
+          life: 255
+        });
+      }
     }
 
-    artEnergy += 0.38;
+    artEnergy += 0.75;
   }
 
   push();
@@ -957,20 +1080,39 @@ function drawScene4() {
   for (let i = artStrokes.length - 1; i >= 0; i--) {
     const pt = artStrokes[i];
 
-    pt.life -= 1.2;
-    pt.y -= 0.35;
+    pt.life -= 1.8;
+    pt.y -= 0.45;
+    pt.x += pt.drift;
 
     fill(pt.color[0], pt.color[1], pt.color[2], pt.life);
     noStroke();
     circle(pt.x, pt.y, pt.size * (pt.life / 255));
+
+    fill(255, 255, 255, pt.life * 0.55);
+    circle(pt.x, pt.y, pt.size * 0.35);
 
     if (pt.life <= 0) artStrokes.splice(i, 1);
   }
 
   pop();
 
+  if (frameCount % 140 === 0) {
+    skyRings.push({
+      x: random(width * 0.2, width * 0.8),
+      y: random(height * 0.2, height * 0.65),
+      radius: 30,
+      alpha: 120
+    });
+  }
+
   const progress = constrain(artEnergy / levelSettings.level4Energy, 0, 1);
   drawProgressBar(progress);
+
+  fill(255, 255, 255, 120);
+  noStroke();
+  textAlign(CENTER, CENTER);
+  textSize(20);
+  text("Point one finger to paint stars in the night sky", width / 2, height - 82);
 
   if (progress >= 1) {
     beginSceneCompletion(5, "Your light drawing is becoming night...");
@@ -1302,15 +1444,15 @@ function drawWipeIfNeeded() {
 
   transitionAlpha = min(210, transitionAlpha + 255 * levelSettings.transitionSpeed);
 
-  fill(255, 255, 255, transitionAlpha * 0.55);
+  fill(255, 255, 255, transitionAlpha * 0.42);
   noStroke();
   rect(0, 0, width, height);
 
-  fill(255, 245, 210, transitionAlpha * 0.35);
+  fill(255, 245, 210, transitionAlpha * 0.28);
   ellipse(width * 0.3, height * 0.45, width * 0.9, height * 1.1);
   ellipse(width * 0.7, height * 0.55, width * 0.9, height * 1.1);
 
-  if (transitionAlpha >= 190 && currentScene !== nextScene) {
+  if (transitionAlpha >= 185 && currentScene !== nextScene) {
     currentScene = nextScene;
 
     if (currentScene >= 4) targetNightBlend = 1;
@@ -1371,11 +1513,11 @@ function ensureCustomizationPanel() {
     <label>Level 1 Smog Goal: <input type="range" id="level1-goal" min="500" max="3500" value="${levelSettings.level1Goal}"></label><br><br>
     <label>Level 2 Trash Count: <input type="range" id="level2-trash" min="3" max="25" value="${levelSettings.level2Trash}"></label><br><br>
     <label>Level 3 Flower Goal: <input type="range" id="level3-flowers" min="5" max="30" value="${levelSettings.level3Flowers}"></label><br><br>
-    <label>Level 4 Drawing Goal: <input type="range" id="level4-energy" min="1500" max="14000" value="${levelSettings.level4Energy}"></label><br><br>
+    <label>Level 4 Drawing Goal: <input type="range" id="level4-energy" min="1500" max="9000" value="${levelSettings.level4Energy}"></label><br><br>
     <label>Level 5 Bubble Goal: <input type="range" id="level5-bubbles" min="5" max="70" value="${levelSettings.level5Bubbles}"></label><br><br>
 
     <label>Transition Hold: <input type="range" id="transition-hold" min="60" max="360" value="${levelSettings.transitionHold}"></label><br><br>
-    <label>Transition Speed: <input type="range" id="transition-speed" min="5" max="40" value="18"></label><br><br>
+    <label>Transition Speed: <input type="range" id="transition-speed" min="5" max="40" value="11"></label><br><br>
 
     <label>Flower Sensitivity: <input type="range" id="flower-sensitivity" min="1" max="12" value="5"></label><br><br>
     <label>Butterflies / Bees: <input type="range" id="creature-amount" min="0" max="20" value="10"></label><br><br>
@@ -1400,11 +1542,11 @@ function applyCustomization() {
   levelSettings.level1Goal = Number(safeGetValue("level1-goal", 1600));
   levelSettings.level2Trash = Number(safeGetValue("level2-trash", 8));
   levelSettings.level3Flowers = Number(safeGetValue("level3-flowers", 14));
-  levelSettings.level4Energy = Number(safeGetValue("level4-energy", 6000));
+  levelSettings.level4Energy = Number(safeGetValue("level4-energy", 3600));
   levelSettings.level5Bubbles = Number(safeGetValue("level5-bubbles", 24));
 
-  levelSettings.transitionHold = Number(safeGetValue("transition-hold", 150));
-  levelSettings.transitionSpeed = Number(safeGetValue("transition-speed", 18)) / 1000;
+  levelSettings.transitionHold = Number(safeGetValue("transition-hold", 120));
+  levelSettings.transitionSpeed = Number(safeGetValue("transition-speed", 11)) / 1000;
 
   levelSettings.flowerSensitivity = Number(safeGetValue("flower-sensitivity", 5)) / 10;
   levelSettings.creatureAmount = Number(safeGetValue("creature-amount", 10)) / 10;
