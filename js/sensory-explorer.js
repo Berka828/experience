@@ -57,6 +57,24 @@ const textDict = {
 };
 
 // ==========================================
+// CRASH-PROOF SAFETY SHIELD
+// ==========================================
+function safeSetText(id, txt) {
+  let el = document.getElementById(id);
+  if (el) el.innerText = txt;
+}
+
+function safeGetChecked(id) {
+  let el = document.getElementById(id);
+  return el ? el.checked : false;
+}
+
+function safeGetValue(id, defaultVal) {
+  let el = document.getElementById(id);
+  return el ? el.value : defaultVal;
+}
+
+// ==========================================
 // 2. MAIN P5.JS SETUP & DRAW
 // ==========================================
 function setup() {
@@ -73,7 +91,7 @@ function setup() {
     video.elt.width = 640;  
     video.elt.height = 480; 
     
-    // SAFE INITIALIZATION: Camera is guaranteed on now!
+    // Camera is guaranteed on and streaming now!
     setupTracking(video); 
     startMediaPipeTracker(video);
     videoReady = true; 
@@ -87,7 +105,7 @@ function draw() {
   if (!videoReady) {
     fill(255); noStroke(); textAlign(CENTER, CENTER); textSize(32);
     text("Waking up the AI... Please wait.", width/2, height/2);
-    return; // Don't run the rest of the game yet!
+    return; 
   }
 
   // Mirror the camera
@@ -102,7 +120,7 @@ function draw() {
   else if (currentScene === 3) drawScene3();
   else if (currentScene === 4) drawScene4(); 
   else if (currentScene === 5) {
-    if (frameCount % 30 === 0 && !document.getElementById('calm-mode').checked) {
+    if (frameCount % 30 === 0 && !safeGetChecked('calm-mode')) {
       spawnExplosion(random(width), random(height), [255, 255, 255]); 
     }
     if (frameCount % 720 === 0 && fadeState === 0) {
@@ -112,7 +130,7 @@ function draw() {
 
   drawSkeletonsAndInteractions();
   
-  if(!document.getElementById('calm-mode').checked) {
+  if(!safeGetChecked('calm-mode')) {
     drawParticles(); 
   }
 
@@ -226,7 +244,6 @@ function setupTracking(videoElement) {
 async function startMediaPipeTracker(videoElement) {
   let isProcessing = false;
   async function processFrame() {
-    // Only send the frame if the previous frame finished processing, to prevent memory crashes
     if (!isProcessing && videoElement.elt.readyState >= 2) {
       isProcessing = true;
       try { await mpHands.send({ image: videoElement.elt }); } catch (e) {}
@@ -293,6 +310,30 @@ function drawSkeletonsAndInteractions() {
   }
 }
 
+function checkHover(targetX, targetY, radius) {
+  for (let k = 0; k < trackedHandsData.length; k++) {
+    let rawIndexTip = trackedHandsData[k][8]; 
+    let ix = width - map(rawIndexTip.x, 0, 1, 0, width); let iy = map(rawIndexTip.y, 0, 1, 0, height);
+    if (dist(ix, iy, targetX, targetY) < radius + 25) return true;
+  }
+  return false;
+}
+
+function checkBodyHits(targetX, targetY, radius) {
+  let vw = video.width || 640; let vh = video.height || 480;
+  for (let i = 0; i < poses.length; i++) {
+    let pose = poses[i].pose;
+    let attackPoints = [pose.leftWrist, pose.rightWrist, pose.leftAnkle, pose.rightAnkle];
+    for (let pt of attackPoints) {
+      if (pt && pt.confidence > 0.2) {
+        let px = width - map(pt.x, 0, vw, 0, width); let py = map(pt.y, 0, vh, 0, height);
+        if (dist(px, py, targetX, targetY) < radius + 40) return true;
+      }
+    }
+  }
+  return false;
+}
+
 // ==========================================
 // 6. SCENE & LEVEL DRAW FUNCTIONS
 // ==========================================
@@ -302,7 +343,7 @@ function initScene3() { clouds = [{ x: width*0.2, y: 150, w: 140, h: 80 }, { x: 
 function initScene4() { rainbowAlpha = 0; popBubbles = []; bubblesPopped = 0; ripples = []; fireflies = []; for(let i=0; i<8; i++) spawnBubble(); for(let i=0; i<30; i++) fireflies.push({x: random(width), y: random(height), vx: random(-0.5, 0.5), vy: random(-0.5, 0.5)}); }
 
 function spawnBubble() { 
-  let baseSize = parseInt(document.getElementById('bubble-size').value) || 45;
+  let baseSize = parseInt(safeGetValue('bubble-size', 45));
   let isGold = random() < 0.08; 
   let isRed = !isGold && random() < 0.4; 
   let bColor = isRed ? [220, 60, 60] : (isGold ? [255, 215, 0] : [random(100, 150), random(200, 255), random(200, 255)]);
@@ -337,7 +378,7 @@ function drawScene2() {
       fill(220, 50, 50, 180); noStroke(); circle(t.x, t.y, t.radius * 2);
       if (t.y < height/2 && t.draggedBy !== null) {
         t.active = false; t.draggedBy = null; score += 20; updateScore();
-        if(!document.getElementById('calm-mode').checked) spawnExplosion(t.x, t.y, [220, 50, 50]); 
+        if(!safeGetChecked('calm-mode')) spawnExplosion(t.x, t.y, [220, 50, 50]); 
       }
     }
   }
@@ -478,7 +519,7 @@ function popBubble(b) {
     for(let i=0; i<3; i++) spawnExplosion(b.x + random(-20,20), b.y + random(-20,20), [255, 215, 0]);
   } else {
     bubblesPopped++; score += 50; 
-    if(!document.getElementById('calm-mode').checked) spawnExplosion(b.x, b.y, b.color);
+    if(!safeGetChecked('calm-mode')) spawnExplosion(b.x, b.y, b.color);
   }
   updateScore();
   setTimeout(spawnBubble, 800);
@@ -491,34 +532,39 @@ function updateScore() { document.getElementById('score').innerText = score; }
 
 function updateUI() {
   let lang = isEnglish ? textDict.EN : textDict.ES;
-  document.getElementById('level-display').innerText = currentScene;
-  document.getElementById('global-score').innerText = globalFlowers;
   
-  if (currentScene === 1) document.getElementById('instructions').innerText = lang.lvl1;
-  if (currentScene === 2) document.getElementById('instructions').innerText = lang.lvl2;
-  if (currentScene === 3) document.getElementById('instructions').innerText = lang.lvl3;
-  if (currentScene === 4) document.getElementById('instructions').innerText = lang.lvl4;
-  if (currentScene === 5) document.getElementById('instructions').innerText = lang.win;
+  safeSetText('level-display', currentScene);
+  safeSetText('global-score', globalFlowers);
+  
+  if (currentScene === 1) safeSetText('instructions', lang.lvl1);
+  if (currentScene === 2) safeSetText('instructions', lang.lvl2);
+  if (currentScene === 3) safeSetText('instructions', lang.lvl3);
+  if (currentScene === 4) safeSetText('instructions', lang.lvl4);
+  if (currentScene === 5) safeSetText('instructions', lang.win);
 }
 
 function updateGlobalLeaderboard(flowersToAdd) {
   globalFlowers = parseInt(globalFlowers) + flowersToAdd;
   localStorage.setItem('bxcm_flowers', globalFlowers);
-  document.getElementById('global-score').innerText = globalFlowers;
+  safeSetText('global-score', globalFlowers);
 }
 
 function toggleLanguage() {
   isEnglish = !isEnglish;
   let lang = isEnglish ? textDict.EN : textDict.ES;
-  document.getElementById('title-text').innerText = lang.title;
-  document.getElementById('level-text').innerText = lang.lvlText;
-  document.getElementById('lang-btn').innerText = lang.btn;
+  
+  safeSetText('title-text', lang.title);
+  safeSetText('level-text', lang.lvlText);
+  safeSetText('lang-btn', lang.btn);
+  
   updateUI();
 }
 
 function toggleSettings() {
   let panel = document.getElementById('settings-panel');
-  panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
+  if (panel) {
+    panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
+  }
 }
 
 function keyPressed() { 
