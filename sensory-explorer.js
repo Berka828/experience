@@ -6,28 +6,30 @@ let videoReady = false;
 let currentScene = 1;
 let score = 0;
 let isEnglish = true;
-let globalFlowers = localStorage.getItem('bxcm_flowers') || 0;
 
+// Cloud Wipe Transition Engine
 let isWiping = false;
 let wipeX = -2000;
 let nextScene = 1;
 
+// Weather & Environments
 let skyColor = [135, 206, 235]; 
 let isRainingInBronx = false;
 let particles = [];
 
-// Stable Hand Tracking Globals
+// AI Tracking Globals
 let mpHands;
 let trackedHandsData = [];
+let poses = []; 
 let prevHandPositions = [];
 let handVelocity = 0;
 let activePointers = []; 
 let activeBouncers = []; 
-let activeFeet = []; // Falls back to lower hands for bouncers in pure hand-mode
+let activeFeet = []; 
 
-// Brand Colors
+// Colors
 let bxcmColors = [ [44, 94, 79], [26, 26, 46], [255, 204, 0], [255, 107, 107] ];
-let playerColors = [ [0, 255, 255], [255, 0, 255], [255, 255, 0] ];
+let playerColors = [ [0, 255, 255], [255, 0, 255], [255, 255, 0], [50, 255, 50] ];
 
 // Level Objects
 let smogGraphics; let smogCleared = 0;
@@ -77,18 +79,16 @@ function setup() {
 
   fetchLiveWeather(); updateUI(); initScene1(); 
   
-  // Clean initialization callback
   video = createCapture(VIDEO, () => { 
     video.elt.width = 640; video.elt.height = 480; 
-    setupTracking(video); 
-    startMediaPipeTracker(video);
+    setupTracking(video); startMediaPipeTracker(video);
     videoReady = true; 
   });
   video.hide(); 
 }
 
 function draw() {
-  background(skyColor[0], skyColor, skyColor, 120); 
+  background(skyColor[0], skyColor[1], skyColor[2], 120); 
 
   if (!videoReady) {
     fill(255); noStroke(); textAlign(CENTER, CENTER); textSize(32);
@@ -139,7 +139,7 @@ function windowResized() {
 }
 
 // ==========================================
-// 3. WEATHER & API SYSTEM
+// 3. SCENIC BACKGROUNDS & API
 // ==========================================
 async function fetchLiveWeather() {
   try {
@@ -184,7 +184,7 @@ class Particle {
     this.life = 255; this.color = color; 
   }
   update() { this.x += this.vx; this.y += this.vy; this.life -= 10; }
-  show() { noStroke(); fill(this.color[0], this.color, this.color, this.life); circle(this.x, this.y, 8); }
+  show() { noStroke(); fill(this.color[0], this.color[1], this.color[2], this.life); circle(this.x, this.y, 8); }
 }
 function spawnExplosion(x, y, color) { for (let i = 0; i < 20; i++) particles.push(new Particle(x, y, color)); }
 function drawParticles() {
@@ -195,12 +195,16 @@ function drawParticles() {
 }
 
 // ==========================================
-// 5. STABLE MEDIAPIPE TRACKING
+// 5. TRUE SKELETON AI TRACKING
 // ==========================================
 function setupTracking(videoElement) {
   mpHands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
   mpHands.setOptions({ maxNumHands: 6, modelComplexity: 1, minDetectionConfidence: 0.3, minTrackingConfidence: 0.3 });
   mpHands.onResults(onHandResults);
+  
+  // Re-added ml5 poseNet for full-body tracking!
+  let poseNet = ml5.poseNet(videoElement, () => console.log('Body tracking ready!'));
+  poseNet.on('pose', results => poses = results);
 }
 
 async function startMediaPipeTracker(videoElement) {
@@ -220,47 +224,64 @@ function onHandResults(results) { trackedHandsData = results.multiHandLandmarks 
 
 function drawSkeletonsAndInteractions() {
   handVelocity = 0; activePointers = []; activeBouncers = []; activeFeet = [];
-  let zoneWidth = width / 3;
+  let vw = video.width || 640; let vh = video.height || 480;
+
+  for (let i = 0; i < poses.length; i++) {
+    let pose = poses[i].pose;
+    let pColor = playerColors[i % playerColors.length];
+
+    if (pose.leftWrist.confidence > 0.2) activeBouncers.push({ x: width - map(pose.leftWrist.x, 0, vw, 0, width), y: map(pose.leftWrist.y, 0, vh, 0, height), bodyId: i, color: pColor });
+    if (pose.rightWrist.confidence > 0.2) activeBouncers.push({ x: width - map(pose.rightWrist.x, 0, vw, 0, width), y: map(pose.rightWrist.y, 0, vh, 0, height), bodyId: i, color: pColor });
+    if (pose.leftAnkle.confidence > 0.2) {
+      let px = width - map(pose.leftAnkle.x, 0, vw, 0, width); let py = map(pose.leftAnkle.y, 0, vh, 0, height);
+      activeBouncers.push({ x: px, y: py, bodyId: i, color: pColor }); activeFeet.push({ x: px, y: py });
+    }
+    if (pose.rightAnkle.confidence > 0.2) {
+      let px = width - map(pose.rightAnkle.x, 0, vw, 0, width); let py = map(pose.rightAnkle.y, 0, vh, 0, height);
+      activeBouncers.push({ x: px, y: py, bodyId: i, color: pColor }); activeFeet.push({ x: px, y: py });
+    }
+  }
 
   for (let k = 0; k < trackedHandsData.length; k++) {
     let landmarks = trackedHandsData[k];
-    let mappedLm = landmarks.map(lm =>);
+    let mappedLm = landmarks.map(lm => [width - map(lm.x, 0, 1, 0, width), map(lm.y, 0, 1, 0, height)]);
     
-    let wrist = mappedLm[0]; let indexBase = mappedLm; let indexTip = mappedLm; let palmCenter = mappedLm;
+    let wrist = mappedLm[0]; let indexBase = mappedLm[5]; let indexTip = mappedLm[8]; let palmCenter = mappedLm[9];
     
-    // Stable pairing based on palm location zones
-    let playerIndex = constrain(Math.floor(palmCenter[0] / zoneWidth), 0, 2);
-    let pColor = playerColors[playerIndex];
-
-    stroke(pColor[0], pColor, pColor, 120); strokeWeight(6); noFill();
-    beginShape(); for (let j = 0; j < 21; j++) vertex(mappedLm[j][0], mappedLm[j]); endShape();
+    let closestBodyId = 0; let minD = 9999;
+    for (let i = 0; i < poses.length; i++) {
+      let pose = poses[i].pose;
+      let lw = { x: width - map(pose.leftWrist.x, 0, vw, 0, width), y: map(pose.leftWrist.y, 0, vh, 0, height) };
+      let rw = { x: width - map(pose.rightWrist.x, 0, vw, 0, width), y: map(pose.rightWrist.y, 0, vh, 0, height) };
+      let dL = dist(wrist[0], wrist[1], lw.x, lw.y); let dR = dist(wrist[0], wrist[1], rw.x, rw.y);
+      if (dL < minD) { minD = dL; closestBodyId = i; }
+      if (dR < minD) { minD = dR; closestBodyId = i; }
+    }
     
-    if (prevHandPositions[k]) handVelocity += dist(indexTip[0], indexTip, prevHandPositions[k][0], prevHandPositions[k]);
+    let pColor = playerColors[closestBodyId % playerColors.length];
+    stroke(pColor[0], pColor[1], pColor[2], 120); strokeWeight(6); noFill();
+    beginShape(); for (let j = 0; j < 21; j++) vertex(mappedLm[j][0], mappedLm[j][1]); endShape();
+    
+    if (prevHandPositions[k]) handVelocity += dist(indexTip[0], indexTip[1], prevHandPositions[k][0], prevHandPositions[k][1]);
     prevHandPositions[k] = indexTip;
 
-    let palmSize = dist(wrist[0], wrist, indexBase[0], indexBase);
-    let indexExt = dist(wrist[0], wrist, indexTip[0], indexTip);
+    let palmSize = dist(wrist[0], wrist[1], indexBase[0], indexBase[1]);
+    let indexExt = dist(wrist[0], wrist[1], indexTip[0], indexTip[1]);
     let isGrabbing = (indexExt < palmSize * 1.5); 
 
     if (isGrabbing) {
-      fill(255, 255, 255, 100); noStroke(); circle(palmCenter[0], palmCenter, 50); 
-      activeBouncers.push({ x: palmCenter[0], y: palmCenter, id: k, color: pColor }); 
-      
-      // Fallback: Low hands in bubble level count as feet (stepping)
-      if (palmCenter > height * 0.7) {
-        activeFeet.push({ x: palmCenter[0], y: palmCenter });
-      }
-
+      fill(255, 255, 255, 100); noStroke(); circle(palmCenter[0], palmCenter[1], 50); 
+      activeBouncers.push({ x: palmCenter[0], y: palmCenter[1], id: k, color: pColor }); 
       if (currentScene === 2) {
         let holding = false;
-        for (let t of trashItems) { if (t.active && t.draggedBy === k) { t.x = palmCenter[0]; t.y = palmCenter; holding = true; } }
+        for (let t of trashItems) { if (t.active && t.draggedBy === k) { t.x = palmCenter[0]; t.y = palmCenter[1]; holding = true; } }
         if (!holding) {
-          for (let t of trashItems) { if (t.active && !t.draggedBy && dist(palmCenter[0], palmCenter, t.x, t.y) < t.radius * 2.5) { t.draggedBy = k; break; } }
+          for (let t of trashItems) { if (t.active && !t.draggedBy && dist(palmCenter[0], palmCenter[1], t.x, t.y) < t.radius * 2.5) { t.draggedBy = k; break; } }
         }
       }
     } else {
-      fill(255); noStroke(); circle(indexTip[0], indexTip, 15);
-      activePointers.push({ x: indexTip[0], y: indexTip, color: pColor }); 
+      fill(255); noStroke(); circle(indexTip[0], indexTip[1], 15);
+      activePointers.push({ x: indexTip[0], y: indexTip[1], color: pColor }); 
       if (currentScene === 2) { for (let t of trashItems) if (t.draggedBy === k) t.draggedBy = null; }
     }
   }
@@ -293,13 +314,14 @@ function initScene5() {
 function spawnBubble() { 
   let baseSize = parseInt(safeGetValue('bubble-size', 45));
   let isRed = random() < 0.4; 
-  let bColor = isRed ? bxcmColors : random([bxcmColors[0], bxcmColors, bxcmColors]);
+  let bColor = isRed ? bxcmColors[3] : random([bxcmColors[0], bxcmColors[1], bxcmColors[2]]);
   popBubbles.push({ 
     x: random(100, width-100), y: -100, vx: random(-1, 1), vy: random(2, 4), 
     radius: baseSize + random(-10, 10), isRed: isRed, color: bColor, active: true 
   }); 
 }
 
+// LEVEL 1: SMOG
 function drawScene1() {
   if (handVelocity > 5 && !isWiping) { 
     let allErasers = activePointers.concat(activeBouncers);
@@ -311,6 +333,7 @@ function drawScene1() {
   if (smogCleared > 1200 && !isWiping) triggerWipeTransition(2);
 }
 
+// LEVEL 2: LIVING RIVER
 function drawScene2() {
   fill(0, 100, 200, 150); noStroke();
   beginShape(); vertex(0, height);
@@ -343,6 +366,7 @@ function drawScene2() {
   if (activeCount === 0 && !isWiping) triggerWipeTransition(3);
 }
 
+// LEVEL 3: GARDEN 
 function drawScene3() {
   noStroke(); fill(101, 67, 33, 150); rect(0, height - 120, width, 120); 
   
@@ -424,4 +448,140 @@ function drawScene4() {
     noStroke(); circle(s.x, s.y, s.size);
   }
 
-  fill(50, 50, 50, 200); rect(width
+  fill(50, 50, 50, 200); rect(width/2 - 200, 30, 400, 30, 15);
+  fill(255, 204, 0); rect(width/2 - 200, 30, map(artEnergy, 0, 2000, 0, 400), 30, 15);
+
+  let allBrushes = activePointers.concat(activeBouncers);
+  for (let brush of allBrushes) {
+    if (frameCount % 2 === 0 && handVelocity > 2) {
+        artStrokes.push({
+          x: brush.x + random(-15, 15), y: brush.y + random(-15, 15),
+          color: brush.color || [255,255,255], life: 255, size: random(10, 30)
+        });
+    }
+    artEnergy += 1; 
+  }
+
+  push();
+  blendMode(ADD); 
+  for (let i = artStrokes.length - 1; i >= 0; i--) {
+    let pt = artStrokes[i];
+    pt.life -= 3; pt.y -= 1; 
+    fill(pt.color[0], pt.color[1], pt.color[2], pt.life); noStroke();
+    circle(pt.x, pt.y, pt.size * (pt.life/255));
+    if (pt.life <= 0) artStrokes.splice(i, 1);
+  }
+  pop();
+
+  if (artEnergy >= 2000 && !isWiping) triggerWipeTransition(5);
+}
+
+// LEVEL 5: BUBBLES & WHIMSICAL SUN
+function drawScene5() {
+  let sunX = width - 180; let sunY = 180;
+  sunSize = 180 + sin(frameCount * 0.02) * 8; 
+  
+  noStroke(); fill(255, 204, 0, 100); circle(sunX, sunY, sunSize);
+  fill(255, 255, 0, 180); circle(sunX, sunY, sunSize - 30);
+  
+  if (safeGetChecked('whimsical-mode')) {
+    fill(0); arc(sunX - 25, sunY - 10, 35, 35, 0, PI); arc(sunX + 25, sunY - 10, 35, 35, 0, PI);
+    stroke(0); strokeWeight(4); line(sunX - 45, sunY - 10, sunX + 45, sunY - 10);
+    noFill(); stroke(0); strokeWeight(4); arc(sunX, sunY + 20, 30, 30, 0, PI);
+  }
+
+  let sunTouched = false;
+  for(let p of activePointers) if(dist(p.x, p.y, sunX, sunY) < sunSize/2) sunTouched = true;
+  for(let b of activeBouncers) if(dist(b.x, b.y, sunX, sunY) < sunSize/2) sunTouched = true;
+  if (sunTouched && frameCount % 4 === 0) {
+    sunSize += 20; spawnExplosion(sunX, sunY + 80, [255, 255, 0]);
+  }
+
+  for (let f of fireflies) {
+    f.x += f.vx + sin(frameCount * 0.05) * 0.5; f.y += f.vy + cos(frameCount * 0.05) * 0.5;
+    fill(255, 255, 150, 180); noStroke(); circle(f.x, f.y, 4);
+    if (f.x < 0) f.x = width; if (f.x > width) f.x = 0;
+    if (f.y < 0) f.y = height; if (f.y > height) f.y = 0;
+  }
+
+  for (let r of ripples) {
+    noFill(); stroke(255, 255, 255, r.alpha); strokeWeight(3); circle(r.x, r.y, r.radius);
+    r.radius += 3; r.alpha -= 5;
+  }
+
+  for (let i = popBubbles.length - 1; i >= 0; i--) {
+    let b = popBubbles[i];
+    if (b.active) {
+      b.vy += 0.015; b.x += b.vx; b.y += b.vy;
+
+      stroke(255, 255, 255, 180); strokeWeight(b.isRed ? 4 : 2); 
+      fill(b.color[0], b.color[1], b.color[2], 180); circle(b.x, b.y, b.radius * 2);
+      if (b.x < b.radius || b.x > width - b.radius) b.vx *= -1;
+
+      for (let kicker of activeBouncers) {
+        if (dist(kicker.x, kicker.y, b.x, b.y) < b.radius + 40) {
+          let angle = atan2(b.y - kicker.y, b.x - kicker.x);
+          b.vx = cos(angle) * 7; b.vy = sin(angle) * 7 - 2; 
+          ripples.push({x: b.x, y: b.y, radius: b.radius, alpha: 200});
+        }
+      }
+
+      let pointed = false;
+      for (let p of activePointers) { if (dist(p.x, p.y, b.x, b.y) < b.radius) pointed = true; }
+      
+      let steppedOn = false;
+      if (b.y > height - b.radius) {
+        for (let foot of activeFeet) if (dist(foot.x, foot.y, b.x, b.y) < b.radius + 50) steppedOn = true;
+      }
+
+      if (pointed || steppedOn) {
+        if (b.isRed) popBubble(b); 
+        else if (pointed) b.vy = -3; 
+      } else if (b.y > height - b.radius) {
+        b.vy = -6; 
+      }
+
+      if (b.y > height + 100 || b.y < -150) { b.active = false; setTimeout(spawnBubble, 500); }
+    }
+  }
+
+  if (bubblesPopped >= 30 && !isWiping) triggerWipeTransition(6);
+}
+
+function popBubble(b) {
+  b.active = false; bubblesPopped++; score += 50; safeSetText('score', score);
+  if(!safeGetChecked('calm-mode')) spawnExplosion(b.x, b.y, b.color);
+  setTimeout(spawnBubble, 800);
+}
+
+// ==========================================
+// 7. USER INTERFACE
+// ==========================================
+function updateUI() {
+  let lang = isEnglish ? textDict.EN : textDict.ES;
+  safeSetText('level-display', currentScene);
+  if (currentScene === 1) safeSetText('instructions', lang.lvl1);
+  if (currentScene === 2) safeSetText('instructions', lang.lvl2);
+  if (currentScene === 3) safeSetText('instructions', lang.lvl3);
+  if (currentScene === 4) safeSetText('instructions', lang.lvl4);
+  if (currentScene === 5) safeSetText('instructions', lang.lvl5);
+  if (currentScene === 6) safeSetText('instructions', lang.win);
+}
+
+function toggleLanguage() {
+  isEnglish = !isEnglish; let lang = isEnglish ? textDict.EN : textDict.ES;
+  safeSetText('title-text', lang.title); safeSetText('level-text', lang.lvlText); safeSetText('lang-btn', lang.btn);
+  updateUI();
+}
+
+function toggleSettings() {
+  let panel = document.getElementById('settings-panel');
+  if (panel) panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
+}
+
+function toggleFullscreen() {
+  let fs = fullscreen();
+  fullscreen(!fs);
+  let btn = document.getElementById('fs-btn');
+  if(btn) btn.innerText = !fs ? "↙ Exit Fullscreen" : "⛶ Fullscreen";
+}
