@@ -190,7 +190,7 @@ function drawSky() {
 }
 
 function drawSun(x, y, baseSize) {
-  const touched = activePointers.concat(activeBouncers).some(p => dist(p.x, p.y, x, y) < baseSize * 1.2);
+  const touched = activePointers.concat(activeBouncers, activeFeet).some(p => dist(p.x, p.y, c.x, c.y) < c.w * 0.65);
   if (touched) {
     sunPulse = 28;
     if (frameCount % 4 === 0 && !safeGetChecked("calm-mode")) {
@@ -406,28 +406,39 @@ function drawHandsFromMediaPipe() {
       drawBetterHand(mapped, pColor, isGrabbing);
     }
 
-    if (isGrabbing) {
-      activeBouncers.push({
-        x: palmCenter[0],
-        y: palmCenter[1],
-        id: k,
-        color: pColor
-      });
+    const handTargets = [
+  thumbTip,
+  indexTip,
+  middleTip,
+  ringTip,
+  pinkyTip,
+  palmCenter
+];
 
-      if (palmCenter[1] > height * 0.7) {
-        activeFeet.push({ x: palmCenter[0], y: palmCenter[1] });
-      }
+for (const target of handTargets) {
+  activePointers.push({
+    x: target[0],
+    y: target[1],
+    color: pColor
+  });
+}
 
-      handleTrashDragging(k, palmCenter);
-    } else {
-      activePointers.push({
-        x: indexTip[0],
-        y: indexTip[1],
-        color: pColor
-      });
+activeBouncers.push({
+  x: palmCenter[0],
+  y: palmCenter[1],
+  id: k,
+  color: pColor
+});
 
-      releaseTrash(k);
-    }
+if (palmCenter[1] > height * 0.7) {
+  activeFeet.push({ x: palmCenter[0], y: palmCenter[1] });
+}
+
+if (isGrabbing) {
+  handleTrashDragging(k, palmCenter);
+} else {
+  releaseTrash(k);
+}
   }
 }
 
@@ -441,9 +452,11 @@ function drawBetterHand(lm, color, isGrabbing) {
     [0, 17, 18, 19, 20]
   ];
 
+  const palmCenter = averagePoints([lm[0], lm[5], lm[9], lm[13], lm[17]]);
+
   if (levelSettings.showSkeletonLines) {
-    stroke(color[0], color[1], color[2], 210);
-    strokeWeight(8);
+    stroke(color[0], color[1], color[2], 95);
+    strokeWeight(4);
     strokeCap(ROUND);
 
     for (const finger of fingers) {
@@ -455,32 +468,24 @@ function drawBetterHand(lm, color, isGrabbing) {
     }
 
     noFill();
-    strokeWeight(6);
+    stroke(255, 255, 255, 90);
+    strokeWeight(3);
     beginShape();
     for (const idx of palm) vertex(lm[idx][0], lm[idx][1]);
     endShape(CLOSE);
   }
 
-  const palmCenter = averagePoints([lm[0], lm[5], lm[9], lm[13], lm[17]]);
-
-  fill(color[0], color[1], color[2], isGrabbing ? 95 : 55);
-  stroke(255, 255, 255, 210);
-  strokeWeight(3);
-  ellipse(palmCenter[0], palmCenter[1], isGrabbing ? 92 : 72, isGrabbing ? 82 : 64);
+  fill(color[0], color[1], color[2], isGrabbing ? 55 : 35);
+  stroke(255, 255, 255, 110);
+  strokeWeight(2);
+  ellipse(palmCenter[0], palmCenter[1], isGrabbing ? 78 : 62, isGrabbing ? 70 : 54);
 
   const tips = [4, 8, 12, 16, 20];
   for (const idx of tips) {
-    fill(255, 255, 255, 225);
-    stroke(color[0], color[1], color[2], 230);
-    strokeWeight(4);
-    circle(lm[idx][0], lm[idx][1], isGrabbing ? 30 : 24);
-  }
-
-  if (isGrabbing) {
-    noFill();
-    stroke(255, 255, 255, 190);
-    strokeWeight(5);
-    circle(palmCenter[0], palmCenter[1], 105);
+    fill(255, 255, 255, 150);
+    stroke(color[0], color[1], color[2], 130);
+    strokeWeight(2);
+    circle(lm[idx][0], lm[idx][1], 18);
   }
 }
 
@@ -735,6 +740,17 @@ function drawScene3() {
     const fy = height - 80 - f.size;
 
     if (f.size >= f.maxSize) grownFlowers++;
+    const flowerTouched = activePointers.concat(activeBouncers, activeFeet).some(
+  p => dist(p.x, p.y, f.x, fy - 10) < 65
+);
+
+if (flowerTouched) {
+  f.size = min(f.maxSize, f.size + 1.5);
+
+  if (frameCount % 8 === 0 && !safeGetChecked("calm-mode")) {
+    spawnExplosion(f.x, fy - 20, [255, 215, 0]);
+  }
+}
 
     fill(46, 204, 113, 220);
     noStroke();
@@ -869,14 +885,32 @@ function drawScene5() {
       }
     }
 
-    const pointed = activePointers.some(p => dist(p.x, p.y, b.x, b.y) < b.radius);
+    const touchedByHand = activePointers.concat(activeBouncers).some(
+  p => dist(p.x, p.y, b.x, b.y) < b.radius + 22
+);
 
-    if (pointed) {
-      if (b.isRed) popBubble(b);
-      else b.vy = -3;
-    } else if (b.y > height - b.radius) {
-      b.vy = -6;
+const touchedByFoot = activeFeet.some(
+  foot => dist(foot.x, foot.y, b.x, b.y) < b.radius + 65
+);
+
+if (touchedByHand || touchedByFoot) {
+  if (b.isRed) {
+    popBubble(b);
+  } else {
+    const hitter = activeFeet.find(foot => dist(foot.x, foot.y, b.x, b.y) < b.radius + 65);
+    if (hitter) {
+      const angle = atan2(b.y - hitter.y, b.x - hitter.x);
+      b.vx = cos(angle) * 8;
+      b.vy = -8;
+    } else {
+      b.vy = -4;
     }
+
+    ripples.push({ x: b.x, y: b.y, radius: b.radius, alpha: 200 });
+  }
+} else if (b.y > height - b.radius) {
+  b.vy = -6;
+}
 
     if (b.y > height + 100 || b.y < -150) {
       b.active = false;
@@ -937,16 +971,22 @@ function releaseTrash(k) {
 }
 
 function spawnBubble() {
-  const radius = Number(safeGetValue("bubble-size", 45));
+  const baseRadius = Number(safeGetValue("bubble-size", 45));
+  const radius = random(baseRadius * 0.65, baseRadius * 1.45);
   const isRed = random() < 0.35;
 
   popBubbles.push({
     x: random(radius, width - radius),
-    y: random(-100, height * 0.4),
-    vx: random(-2, 2),
-    vy: random(0.5, 2),
+    y: random(-120, height * 0.45),
+    vx: random(-2.4, 2.4),
+    vy: random(0.5, 2.2),
     radius,
-    color: isRed ? [255, 80, 90] : random([[80, 220, 255], [180, 120, 255], [120, 255, 180], [255, 220, 80]]),
+    color: isRed ? [255, 80, 90] : random([
+      [80, 220, 255],
+      [180, 120, 255],
+      [120, 255, 180],
+      [255, 220, 80]
+    ]),
     isRed,
     active: true
   });
