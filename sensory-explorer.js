@@ -6,11 +6,15 @@ let videoReady = false;
 let currentScene = 1;
 let score = 0;
 let isEnglish = true;
+let globalFlowers = localStorage.getItem('bxcm_flowers') || 0;
+
+let fadeState = 0; 
+let fadeAlpha = 0;
+let nextScene = 1;
 
 // Cloud Wipe Transition Engine
 let isWiping = false;
 let wipeX = -2000;
-let nextScene = 1;
 
 // Weather & Environments
 let skyColor = [135, 206, 235]; 
@@ -33,9 +37,13 @@ let playerColors = [ [0, 255, 255], [255, 0, 255], [255, 255, 0], [50, 255, 50] 
 
 // Level Objects
 let smogGraphics; let smogCleared = 0;
-let trashItems = []; let fishes = []; let waterOffset = 0;
+let trashItems = []; let fishes = []; 
 let clouds = []; let raindrops = []; let flowers = []; let grass = []; let insects = []; let scene3Timer = 0;
-let instruments = []; let musicNotes = []; let musicEnergy = 0;
+
+// Level 4 (Magic Canvas) Objects
+let artStrokes = []; let artEnergy = 0; let stars = [];
+
+// Level 5 (Bubbles) Objects
 let popBubbles = []; let bubblesPopped = 0; let sunSize = 180;
 let ripples = []; let fireflies = []; 
 
@@ -46,7 +54,7 @@ const textDict = {
     lvl1: "Level 1: Wave your arms to clear the smog.",
     lvl2: "Level 2: Clean the river! Play with the fish!",
     lvl3: "Level 3: Touch clouds to make rain. Grow the garden!",
-    lvl4: "Level 4: BRONX BEATS! Hit the instruments!",
+    lvl4: "Level 4: MAGIC CANVAS! Draw in the air with light!",
     lvl5: "Level 5: Pop Coral bubbles! Bounce the rest.",
     win: "🎉 Beautiful job! Thank you! 🎉",
     lvlText: "Level:", btn: "Español"
@@ -56,7 +64,7 @@ const textDict = {
     lvl1: "Nivel 1: Agita tus brazos para limpiar el smog.",
     lvl2: "Nivel 2: ¡Limpia el río! ¡Juega con los peces!",
     lvl3: "Nivel 3: Toca las nubes. ¡Crece el jardín!",
-    lvl4: "Nivel 4: ¡RITMOS! ¡Toca los instrumentos!",
+    lvl4: "Nivel 4: ¡LIENZO MÁGICO! ¡Dibuja en el aire con luz!",
     lvl5: "Nivel 5: ¡Explota las corales! Rebota las demás.",
     win: "🎉 ¡Hermoso trabajo! ¡Gracias! 🎉",
     lvlText: "Nivel:", btn: "English"
@@ -97,7 +105,7 @@ function draw() {
 
   push(); translate(width, 0); scale(-1, 1); image(video, 0, 0, width, height); pop();
   
-  drawScenicBackground(); // Draws Mountains/Cityscapes based on level
+  drawScenicBackground(); 
 
   if (currentScene === 1) drawScene1();
   else if (currentScene === 2) drawScene2();
@@ -114,17 +122,15 @@ function draw() {
 
   // SEAMLESS CLOUD WIPE TRANSITION
   if (isWiping) {
-    wipeX += 40; // Speed of clouds sweeping
+    wipeX += 40; 
     drawGiantCloudWipe(wipeX);
 
-    // Swap scenes when clouds cover the middle of the screen
     if (wipeX > width / 2 && currentScene !== nextScene) {
       currentScene = nextScene; updateUI();
       if (currentScene === 1) initScene1(); if (currentScene === 2) initScene2();
       if (currentScene === 3) initScene3(); if (currentScene === 4) initScene4();
       if (currentScene === 5) initScene5();
     }
-    // End transition
     if (wipeX > width + 1000) { isWiping = false; wipeX = -2000; }
   }
 }
@@ -156,12 +162,12 @@ async function fetchLiveWeather() {
 
 function drawScenicBackground() {
   noStroke();
-  if (currentScene === 1) { // City Silhouette
+  if (currentScene === 1) { 
     fill(100, 100, 110, 150);
     rect(width*0.1, height-300, 150, 300); rect(width*0.3, height-400, 120, 400);
     rect(width*0.6, height-250, 200, 250); rect(width*0.8, height-350, 100, 350);
   } 
-  else if (currentScene === 2 || currentScene === 3) { // Rolling Hills / Mountains
+  else if (currentScene === 2 || currentScene === 3) { 
     fill(34, 139, 34, 100);
     ellipse(width*0.3, height, width*0.8, 600);
     fill(34, 139, 34, 120);
@@ -174,7 +180,7 @@ function drawGiantCloudWipe(xPos) {
   ellipse(xPos, height/2, 1200, 1500);
   ellipse(xPos - 300, height/3, 1000, 1200);
   ellipse(xPos - 300, height*0.7, 1000, 1200);
-  ellipse(xPos - 600, height/2, 1500, 2000); // Fills the gaps
+  ellipse(xPos - 600, height/2, 1500, 2000); 
 }
 
 // ==========================================
@@ -228,15 +234,17 @@ function drawSkeletonsAndInteractions() {
 
   for (let i = 0; i < poses.length; i++) {
     let pose = poses[i].pose;
-    if (pose.leftWrist.confidence > 0.2) activeBouncers.push({ x: width - map(pose.leftWrist.x, 0, vw, 0, width), y: map(pose.leftWrist.y, 0, vh, 0, height), bodyId: i });
-    if (pose.rightWrist.confidence > 0.2) activeBouncers.push({ x: width - map(pose.rightWrist.x, 0, vw, 0, width), y: map(pose.rightWrist.y, 0, vh, 0, height), bodyId: i });
+    let pColor = playerColors[i % playerColors.length];
+
+    if (pose.leftWrist.confidence > 0.2) activeBouncers.push({ x: width - map(pose.leftWrist.x, 0, vw, 0, width), y: map(pose.leftWrist.y, 0, vh, 0, height), bodyId: i, color: pColor });
+    if (pose.rightWrist.confidence > 0.2) activeBouncers.push({ x: width - map(pose.rightWrist.x, 0, vw, 0, width), y: map(pose.rightWrist.y, 0, vh, 0, height), bodyId: i, color: pColor });
     if (pose.leftAnkle.confidence > 0.2) {
       let px = width - map(pose.leftAnkle.x, 0, vw, 0, width); let py = map(pose.leftAnkle.y, 0, vh, 0, height);
-      activeBouncers.push({ x: px, y: py, bodyId: i }); activeFeet.push({ x: px, y: py });
+      activeBouncers.push({ x: px, y: py, bodyId: i, color: pColor }); activeFeet.push({ x: px, y: py });
     }
     if (pose.rightAnkle.confidence > 0.2) {
       let px = width - map(pose.rightAnkle.x, 0, vw, 0, width); let py = map(pose.rightAnkle.y, 0, vh, 0, height);
-      activeBouncers.push({ x: px, y: py, bodyId: i }); activeFeet.push({ x: px, y: py });
+      activeBouncers.push({ x: px, y: py, bodyId: i, color: pColor }); activeFeet.push({ x: px, y: py });
     }
   }
 
@@ -269,7 +277,7 @@ function drawSkeletonsAndInteractions() {
 
     if (isGrabbing) {
       fill(255, 255, 255, 100); noStroke(); circle(palmCenter[0], palmCenter[1], 50); 
-      activeBouncers.push({ x: palmCenter[0], y: palmCenter[1], id: k }); 
+      activeBouncers.push({ x: palmCenter[0], y: palmCenter[1], id: k, color: pColor }); 
       if (currentScene === 2) {
         let holding = false;
         for (let t of trashItems) { if (t.active && t.draggedBy === k) { t.x = palmCenter[0]; t.y = palmCenter[1]; holding = true; } }
@@ -279,7 +287,7 @@ function drawSkeletonsAndInteractions() {
       }
     } else {
       fill(255); noStroke(); circle(indexTip[0], indexTip[1], 15);
-      activePointers.push({ x: indexTip[0], y: indexTip[1] }); 
+      activePointers.push({ x: indexTip[0], y: indexTip[1], color: pColor }); 
       if (currentScene === 2) { for (let t of trashItems) if (t.draggedBy === k) t.draggedBy = null; }
     }
   }
@@ -300,12 +308,8 @@ function initScene3() {
   for(let x=0; x<width; x+=15) grass.push({x: x, h: random(10, 20), maxH: random(40, 70)});
 }
 function initScene4() {
-  instruments = [
-    { x: width * 0.2, y: height/2, radius: 80, type: '🥁', color: [255, 107, 107] },
-    { x: width * 0.5, y: height/2, radius: 90, type: '💿', color: [44, 94, 79] },
-    { x: width * 0.8, y: height/2, radius: 80, type: '🎺', color: [255, 204, 0] }
-  ];
-  musicNotes = []; musicEnergy = 0;
+  artStrokes = []; artEnergy = 0; stars = [];
+  for(let i=0; i<60; i++) stars.push({x: random(width), y: random(height), size: random(1, 4), twinkle: random(TWO_PI)});
 }
 function initScene5() { 
   popBubbles = []; bubblesPopped = 0; ripples = []; fireflies = []; 
@@ -337,42 +341,28 @@ function drawScene1() {
 
 // LEVEL 2: LIVING RIVER
 function drawScene2() {
-  // Undulating Water Surface
   fill(0, 100, 200, 150); noStroke();
-  beginShape();
-  vertex(0, height);
-  for (let x = 0; x <= width; x += 50) {
-    let y = height * 0.7 + sin(frameCount * 0.05 + x * 0.01) * 15;
-    vertex(x, y);
-  }
-  vertex(width, height);
-  endShape(CLOSE);
+  beginShape(); vertex(0, height);
+  for (let x = 0; x <= width; x += 50) { let y = height * 0.7 + sin(frameCount * 0.05 + x * 0.01) * 15; vertex(x, y); }
+  vertex(width, height); endShape(CLOSE);
 
-  // Fish AI
   for (let f of fishes) {
     f.x += f.vx;
-    if (f.x < 0 || f.x > width) f.vx *= -1; // Bounce off walls
-    
-    // React to players in water
+    if (f.x < 0 || f.x > width) f.vx *= -1; 
     for (let b of activeBouncers) {
-      if (dist(b.x, b.y, f.x, f.y) < 80) f.vx = (f.x > b.x) ? abs(f.vx) : -abs(f.vx); // Dart away
+      if (dist(b.x, b.y, f.x, f.y) < 80) f.vx = (f.x > b.x) ? abs(f.vx) : -abs(f.vx); 
     }
     textSize(40); textAlign(CENTER, CENTER);
     push(); translate(f.x, f.y); scale(f.vx > 0 ? -1 : 1, 1); text('🐟', 0, 0); pop();
   }
 
-  // Pollution
   let activeCount = 0;
   for (let t of trashItems) {
     if (t.active) {
       activeCount++;
-      // Float on waves if not dragged
-      if (t.draggedBy === null) {
-        t.y = height * 0.72 + sin(frameCount * 0.05 + t.x * 0.01) * 15;
-      }
+      if (t.draggedBy === null) t.y = height * 0.72 + sin(frameCount * 0.05 + t.x * 0.01) * 15;
       fill(220, 50, 50, 180); noStroke(); circle(t.x, t.y, t.radius * 2);
       
-      // Clean up if pulled high above water
       if (t.y < height * 0.5 && t.draggedBy !== null) {
         t.active = false; t.draggedBy = null; score += 20; safeSetText('score', score);
         if(!safeGetChecked('calm-mode')) spawnExplosion(t.x, t.y, [220, 50, 50]); 
@@ -382,15 +372,12 @@ function drawScene2() {
   if (activeCount === 0 && !isWiping) triggerWipeTransition(3);
 }
 
-// LEVEL 3: GARDEN
+// LEVEL 3: GARDEN 
 function drawScene3() {
-  noStroke(); fill(101, 67, 33, 150); rect(0, height - 120, width, 120); // Soil
+  noStroke(); fill(101, 67, 33, 150); rect(0, height - 120, width, 120); 
   
-  // Draw & Grow Grass
   stroke(46, 204, 113, 200); strokeWeight(4);
-  for (let g of grass) {
-    line(g.x, height, g.x + sin(frameCount*0.02 + g.x)*5, height - g.h);
-  }
+  for (let g of grass) line(g.x, height, g.x + sin(frameCount*0.02 + g.x)*5, height - g.h);
 
   for (let c of clouds) {
     fill(220, 220, 220, 220); noStroke();
@@ -408,11 +395,8 @@ function drawScene3() {
   for (let r of raindrops) {
     if (r.active) {
       fill(0, 150, 255, 150); noStroke(); circle(r.x, r.y, 12); r.y += 6; 
-      
       if (r.y > height - 100) { 
         r.active = false; score += 2; safeSetText('score', score);
-        
-        // Grow Grass where rain hits
         for (let g of grass) { if (abs(g.x - r.x) < 30 && g.h < g.maxH) g.h += 1; }
 
         let watered = false;
@@ -430,178 +414,4 @@ function drawScene3() {
     if (f.size >= f.maxSize) {
       grownFlowers++;
       let fTouched = false; 
-      for(let p of activePointers) if(dist(p.x, p.y, f.x, fCenterY) < 40) fTouched = true;
-      for(let b of activeBouncers) if(dist(b.x, b.y, f.x, fCenterY) < 40) fTouched = true;
-
-      if (fTouched && f.cooldown <= 0) {
-        if (f.type === 0) insects.push({ x: f.x, y: fCenterY, vx: random(-2, 2), vy: random(-2, -5), emoji: '🦋', life: 255 });
-        else if (f.type === 1) insects.push({ x: f.x, y: fCenterY, vx: random(-2, 2), vy: random(-2, -5), emoji: '🐝', life: 255 });
-        else spawnExplosion(f.x, fCenterY, [255, 215, 0]); 
-        f.cooldown = 150; 
-      }
-    }
-    if (f.cooldown > 0) f.cooldown--;
-    
-    fill(46, 204, 113, 200); noStroke(); rect(f.x - 3, fCenterY, 6, f.size); 
-    if (f.type === 0) { fill(255, 105, 180, 220); ellipse(f.x, fCenterY - 10, f.size/1.5, f.size); } 
-    else if (f.type === 1) { fill(255, 215, 0, 220); for(let a=0; a<TWO_PI; a+=PI/4) ellipse(f.x + cos(a)*15, fCenterY - 15 + sin(a)*15, 15, 15); fill(139, 69, 19); circle(f.x, fCenterY - 15, 20); } 
-    else { fill(200, 100, 255, 220); for(let a=0; a<TWO_PI; a+=PI/3) ellipse(f.x + cos(a)*12, fCenterY - 10 + sin(a)*12, 12, 12); fill(255, 255, 0); circle(f.x, fCenterY - 10, 15); }
-  }
-
-  for (let i = insects.length - 1; i >= 0; i--) {
-    let ins = insects[i];
-    ins.x += ins.vx + sin(frameCount * 0.1); ins.y += ins.vy; ins.life -= 1.5;
-    textSize(35); textAlign(CENTER, CENTER); text(ins.emoji, ins.x, ins.y);
-    if (ins.life <= 0 || ins.y < -50) insects.splice(i, 1);
-  }
-
-  if (grownFlowers >= 20) {
-    scene3Timer--;
-    if (scene3Timer <= 0 && !isWiping) triggerWipeTransition(4);
-  }
-}
-
-// LEVEL 4: BRONX BEATS
-function drawScene4() {
-  background(40, 20, 80, 120); // Twilight
-  
-  fill(50, 50, 50, 200); rect(width/2 - 200, 30, 400, 30, 15);
-  fill(255, 204, 0); rect(width/2 - 200, 30, map(musicEnergy, 0, 1500, 0, 400), 30, 15);
-
-  for (let inst of instruments) {
-    fill(inst.color[0], inst.color[1], inst.color[2], 180); noStroke(); circle(inst.x, inst.y, inst.radius * 2);
-    fill(255); textAlign(CENTER, CENTER); textSize(60); text(inst.type, inst.x, inst.y);
-
-    let isHit = false;
-    for(let p of activePointers) if(dist(p.x, p.y, inst.x, inst.y) < inst.radius) isHit = true;
-    for(let b of activeBouncers) if(dist(b.x, b.y, inst.x, inst.y) < inst.radius) isHit = true;
-
-    if (isHit && frameCount % 6 === 0) {
-      musicEnergy += 10;
-      musicNotes.push({ x: inst.x, y: inst.y - 40, emoji: random(['🎵', '🎶', '🎼']), life: 255 });
-      inst.radius = 90; 
-    } else {
-      if (inst.radius > 80) inst.radius -= 1; 
-    }
-  }
-
-  for (let i = musicNotes.length - 1; i >= 0; i--) {
-    let n = musicNotes[i];
-    n.y -= 4; n.x += sin(frameCount * 0.1) * 3; n.life -= 4;
-    fill(255, 255, 255, n.life); textSize(40); text(n.emoji, n.x, n.y);
-    if (n.life <= 0) musicNotes.splice(i, 1);
-  }
-
-  if (musicEnergy >= 1500 && !isWiping) triggerWipeTransition(5);
-}
-
-// LEVEL 5: BUBBLES & WHIMSICAL SUN
-function drawScene5() {
-  let sunX = width - 180; let sunY = 180;
-  sunSize = 180 + sin(frameCount * 0.02) * 8; 
-  
-  // Whimsical Sun
-  noStroke(); fill(255, 204, 0, 100); circle(sunX, sunY, sunSize);
-  fill(255, 255, 0, 180); circle(sunX, sunY, sunSize - 30);
-  
-  if (safeGetChecked('whimsical-mode')) {
-    // Sunglasses
-    fill(0);
-    arc(sunX - 25, sunY - 10, 35, 35, 0, PI); arc(sunX + 25, sunY - 10, 35, 35, 0, PI);
-    stroke(0); strokeWeight(4); line(sunX - 45, sunY - 10, sunX + 45, sunY - 10);
-    // Smile
-    noFill(); stroke(0); strokeWeight(4); arc(sunX, sunY + 20, 30, 30, 0, PI);
-  }
-
-  let sunTouched = false;
-  for(let p of activePointers) if(dist(p.x, p.y, sunX, sunY) < sunSize/2) sunTouched = true;
-  for(let b of activeBouncers) if(dist(b.x, b.y, sunX, sunY) < sunSize/2) sunTouched = true;
-  if (sunTouched && frameCount % 4 === 0) {
-    sunSize += 20; spawnExplosion(sunX, sunY + 80, [255, 255, 0]);
-  }
-
-  for (let f of fireflies) {
-    f.x += f.vx + sin(frameCount * 0.05) * 0.5; f.y += f.vy + cos(frameCount * 0.05) * 0.5;
-    fill(255, 255, 150, 180); noStroke(); circle(f.x, f.y, 4);
-    if (f.x < 0) f.x = width; if (f.x > width) f.x = 0;
-    if (f.y < 0) f.y = height; if (f.y > height) f.y = 0;
-  }
-
-  for (let r of ripples) {
-    noFill(); stroke(255, 255, 255, r.alpha); strokeWeight(3); circle(r.x, r.y, r.radius);
-    r.radius += 3; r.alpha -= 5;
-  }
-
-  for (let i = popBubbles.length - 1; i >= 0; i--) {
-    let b = popBubbles[i];
-    if (b.active) {
-      b.vy += 0.015; b.x += b.vx; b.y += b.vy;
-
-      stroke(255, 255, 255, 180); strokeWeight(b.isRed ? 4 : 2); 
-      fill(b.color[0], b.color[1], b.color[2], 180); circle(b.x, b.y, b.radius * 2);
-      if (b.x < b.radius || b.x > width - b.radius) b.vx *= -1;
-
-      for (let kicker of activeBouncers) {
-        if (dist(kicker.x, kicker.y, b.x, b.y) < b.radius + 40) {
-          let angle = atan2(b.y - kicker.y, b.x - kicker.x);
-          b.vx = cos(angle) * 7; b.vy = sin(angle) * 7 - 2; 
-          ripples.push({x: b.x, y: b.y, radius: b.radius, alpha: 200});
-        }
-      }
-
-      let pointed = false;
-      for (let p of activePointers) { if (dist(p.x, p.y, b.x, b.y) < b.radius) pointed = true; }
-      
-      let steppedOn = false;
-      if (b.y > height - b.radius) {
-        for (let foot of activeFeet) if (dist(foot.x, foot.y, b.x, b.y) < b.radius + 50) steppedOn = true;
-      }
-
-      if (pointed || steppedOn) {
-        if (b.isRed) popBubble(b); 
-        else if (pointed) b.vy = -3; 
-      } else if (b.y > height - b.radius) {
-        b.vy = -6; 
-      }
-
-      if (b.y > height + 100 || b.y < -150) { b.active = false; setTimeout(spawnBubble, 500); }
-    }
-  }
-
-  if (bubblesPopped >= 30 && !isWiping) triggerWipeTransition(6);
-}
-
-function popBubble(b) {
-  b.active = false; bubblesPopped++; score += 50; safeSetText('score', score);
-  if(!safeGetChecked('calm-mode')) spawnExplosion(b.x, b.y, b.color);
-  setTimeout(spawnBubble, 800);
-}
-
-// ==========================================
-// 7. USER INTERFACE
-// ==========================================
-function updateUI() {
-  let lang = isEnglish ? textDict.EN : textDict.ES;
-  safeSetText('level-display', currentScene);
-  if (currentScene === 1) safeSetText('instructions', lang.lvl1);
-  if (currentScene === 2) safeSetText('instructions', lang.lvl2);
-  if (currentScene === 3) safeSetText('instructions', lang.lvl3);
-  if (currentScene === 4) safeSetText('instructions', lang.lvl4);
-  if (currentScene === 5) safeSetText('instructions', lang.lvl5);
-  if (currentScene === 6) safeSetText('instructions', lang.win);
-}
-
-function toggleLanguage() {
-  isEnglish = !isEnglish; let lang = isEnglish ? textDict.EN : textDict.ES;
-  safeSetText('title-text', lang.title); safeSetText('level-text', lang.lvlText); safeSetText('lang-btn', lang.btn);
-  updateUI();
-}
-
-function toggleSettings() {
-  let panel = document.getElementById('settings-panel');
-  if (panel) panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
-}
-
-function toggleFullscreen() {
-  let fs = fullscreen();
- 
+      for(let p of activePointers) if(dist(p.x, p.y, f.x, fCenterY) < 40) fTouched = 
