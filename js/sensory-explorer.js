@@ -8,16 +8,12 @@ let score = 0;
 let isEnglish = true;
 let globalFlowers = localStorage.getItem('bxcm_flowers') || 0;
 
-// Fade Transition Engine
-let fadeState = 0; // 0: Playing, 1: Fading Out, 2: Fading In
+let fadeState = 0; 
 let fadeAlpha = 0;
 let nextScene = 1;
 
-// Weather
-let skyColor = [135, 206, 235]; // Default Day Blue
+let skyColor = [135, 206, 235]; 
 let isRainingInBronx = false;
-
-// Particles
 let particles = [];
 
 // AI Tracking Globals
@@ -26,23 +22,17 @@ let trackedHandsData = [];
 let poses = []; 
 let prevHandPositions = [];
 let handVelocity = 0;
-let activePointers = []; // Index finger tips (For Popping)
-let activeBouncers = []; // Palms, Fists, Ankles (For Bouncing)
+let activePointers = []; 
+let activeBouncers = []; 
 
-// Colors & Customization
 let playerColors = [ [0, 255, 255], [255, 0, 255], [255, 255, 0] ];
-let animalEmojis = ['🦊', '🐸', '🐼', '🐯', '🐰'];
 
 // Level Objects
 let smogGraphics; let smogCleared = 0;
 let trashItems = []; let clouds = []; let raindrops = []; 
 let flowers = []; let insects = []; let scene3Timer = 0;
-
-// Level 4 Visual Amenities
 let popBubbles = []; let bubblesPopped = 0; let sunSize = 180;
-let rainbowAlpha = 0; 
-let ripples = []; 
-let fireflies = []; 
+let rainbowAlpha = 0; let ripples = []; let fireflies = []; 
 
 // Bilingual System
 const textDict = {
@@ -72,23 +62,33 @@ const textDict = {
 function setup() {
   let canvas = createCanvas(windowWidth, windowHeight);
   canvas.position(0, 0);
+
+  // Initialize UI & Scenery early
+  fetchLiveWeather(); 
+  updateUI(); 
+  initScene1(); 
   
+  // Start Camera - Wait for it to be fully ready before booting AI
   video = createCapture(VIDEO, () => { 
     video.elt.width = 640;  
     video.elt.height = 480; 
-    videoReady = true; 
+    
+    // SAFE INITIALIZATION: Camera is guaranteed on now!
+    setupTracking(video); 
     startMediaPipeTracker(video);
+    videoReady = true; 
   });
   video.hide(); 
-
-  fetchLiveWeather(); 
-  setupTracking(video); 
-  updateUI(); 
-  initScene1(); 
 }
 
 function draw() {
-  if (!videoReady) return;
+  background(skyColor[0], skyColor[1], skyColor[2], 120); 
+
+  if (!videoReady) {
+    fill(255); noStroke(); textAlign(CENTER, CENTER); textSize(32);
+    text("Waking up the AI... Please wait.", width/2, height/2);
+    return; // Don't run the rest of the game yet!
+  }
 
   // Mirror the camera
   push();
@@ -96,8 +96,6 @@ function draw() {
   image(video, 0, 0, width, height); 
   pop();
   
-  background(skyColor[0], skyColor[1], skyColor[2], 120); 
-
   // Level Renderer
   if (currentScene === 1) drawScene1();
   else if (currentScene === 2) drawScene2();
@@ -108,7 +106,7 @@ function draw() {
       spawnExplosion(random(width), random(height), [255, 255, 255]); 
     }
     if (frameCount % 720 === 0 && fadeState === 0) {
-      triggerTransition(1); // Auto loop back to level 1
+      triggerTransition(1); 
     }
   }
 
@@ -146,10 +144,7 @@ function draw() {
 }
 
 function triggerTransition(targetScene) {
-  if (fadeState === 0) {
-    fadeState = 1;
-    nextScene = targetScene;
-  }
+  if (fadeState === 0) { fadeState = 1; nextScene = targetScene; }
 }
 
 function windowResized() {
@@ -204,9 +199,7 @@ class Particle {
 }
 
 function spawnExplosion(x, y, color) {
-  for (let i = 0; i < 20; i++) {
-    particles.push(new Particle(x, y, color));
-  }
+  for (let i = 0; i < 20; i++) particles.push(new Particle(x, y, color));
 }
 
 function drawParticles() {
@@ -231,9 +224,13 @@ function setupTracking(videoElement) {
 }
 
 async function startMediaPipeTracker(videoElement) {
+  let isProcessing = false;
   async function processFrame() {
-    if (videoElement.elt.readyState >= 2) {
+    // Only send the frame if the previous frame finished processing, to prevent memory crashes
+    if (!isProcessing && videoElement.elt.readyState >= 2) {
+      isProcessing = true;
       try { await mpHands.send({ image: videoElement.elt }); } catch (e) {}
+      isProcessing = false;
     }
     requestAnimationFrame(processFrame); 
   }
@@ -243,14 +240,11 @@ async function startMediaPipeTracker(videoElement) {
 function onHandResults(results) { trackedHandsData = results.multiHandLandmarks || []; }
 
 function drawSkeletonsAndInteractions() {
-  handVelocity = 0;
-  activePointers = [];
-  activeBouncers = [];
+  handVelocity = 0; activePointers = []; activeBouncers = [];
   
   let vw = video.width || 640; let vh = video.height || 480;
   let zoneWidth = width / 3;
 
-  // Process Hands
   for (let k = 0; k < trackedHandsData.length; k++) {
     let landmarks = trackedHandsData[k];
     let mappedLm = landmarks.map(lm => [width - map(lm.x, 0, 1, 0, width), map(lm.y, 0, 1, 0, height)]);
@@ -287,7 +281,6 @@ function drawSkeletonsAndInteractions() {
     }
   }
 
-  // Process Full Body (Ankles/Wrists for kicking and bumping)
   for (let i = 0; i < poses.length; i++) {
     let pose = poses[i].pose;
     let attackPoints = [pose.leftWrist, pose.rightWrist, pose.leftAnkle, pose.rightAnkle];
@@ -298,30 +291,6 @@ function drawSkeletonsAndInteractions() {
       }
     }
   }
-}
-
-function checkHover(targetX, targetY, radius) {
-  for (let k = 0; k < trackedHandsData.length; k++) {
-    let rawIndexTip = trackedHandsData[k][8]; 
-    let ix = width - map(rawIndexTip.x, 0, 1, 0, width); let iy = map(rawIndexTip.y, 0, 1, 0, height);
-    if (dist(ix, iy, targetX, targetY) < radius + 25) return true;
-  }
-  return false;
-}
-
-function checkBodyHits(targetX, targetY, radius) {
-  let vw = video.width || 640; let vh = video.height || 480;
-  for (let i = 0; i < poses.length; i++) {
-    let pose = poses[i].pose;
-    let attackPoints = [pose.leftWrist, pose.rightWrist, pose.leftAnkle, pose.rightAnkle];
-    for (let pt of attackPoints) {
-      if (pt && pt.confidence > 0.2) {
-        let px = width - map(pt.x, 0, vw, 0, width); let py = map(pt.y, 0, vh, 0, height);
-        if (dist(px, py, targetX, targetY) < radius + 40) return true;
-      }
-    }
-  }
-  return false;
 }
 
 // ==========================================
@@ -405,8 +374,7 @@ function drawScene3() {
     if (f.size < 55) f.size += 0.3; 
     else {
       grownFlowers++;
-      let fTouched = false;
-      let fCenterY = height - 100 - f.size;
+      let fTouched = false; let fCenterY = height - 100 - f.size;
       for(let p of activePointers) if(dist(p.x, p.y, f.x, fCenterY) < 40) fTouched = true;
       for(let b of activeBouncers) if(dist(b.x, b.y, f.x, fCenterY) < 40) fTouched = true;
 
@@ -416,15 +384,13 @@ function drawScene3() {
       }
     }
     if (f.cooldown > 0) f.cooldown--;
-    
     fill(46, 204, 113, 200); rect(f.x - 3, height - 100 - f.size, 6, f.size); 
     fill(255, 180, 200, 220); circle(f.x, height - 100 - f.size, f.size/1.5); 
   }
 
   for (let i = insects.length - 1; i >= 0; i--) {
     let ins = insects[i];
-    ins.x += ins.vx + sin(frameCount * 0.1); 
-    ins.y += ins.vy; ins.life -= 1.5;
+    ins.x += ins.vx + sin(frameCount * 0.1); ins.y += ins.vy; ins.life -= 1.5;
     textSize(35); textAlign(CENTER, CENTER); text(ins.emoji, ins.x, ins.y);
     if (ins.life <= 0 || ins.y < -50) insects.splice(i, 1);
   }
@@ -449,7 +415,6 @@ function drawScene4() {
   noStroke(); fill(255, 204, 0, 100); circle(sunX, sunY, sunSize);
   fill(255, 255, 0, 180); circle(sunX, sunY, sunSize - 30);
 
-  // Background Fireflies
   for (let f of fireflies) {
     f.x += f.vx + sin(frameCount * 0.05) * 0.5; f.y += f.vy + cos(frameCount * 0.05) * 0.5;
     fill(255, 255, 150, 180); noStroke(); circle(f.x, f.y, 4);
@@ -457,13 +422,11 @@ function drawScene4() {
     if (f.y < 0) f.y = height; if (f.y > height) f.y = 0;
   }
 
-  // Visual Ripples (Expanding Rings)
   for (let r of ripples) {
     noFill(); stroke(255, 255, 255, r.alpha); strokeWeight(3); circle(r.x, r.y, r.radius);
     r.radius += 3; r.alpha -= 5;
   }
 
-  // Bubble Physics
   for (let i = popBubbles.length - 1; i >= 0; i--) {
     let b = popBubbles[i];
     if (b.active) {
@@ -476,10 +439,8 @@ function drawScene4() {
       if (b.isGold) {
         fill(255, 255, 255, random(100, 255)); noStroke(); circle(b.x - 10, b.y - 10, 8);
       }
-
       if (b.x < b.radius || b.x > width - b.radius) b.vx *= -1;
 
-      // Bounce Physics (Kick / Palm)
       for (let kicker of activeBouncers) {
         if (dist(kicker.x, kicker.y, b.x, b.y) < b.radius + 40) {
           let angle = atan2(b.y - kicker.y, b.x - kicker.x);
@@ -503,7 +464,6 @@ function drawScene4() {
           b.vy = -6; ripples.push({x: b.x, y: height, radius: b.radius, alpha: 150});
         }
       }
-
       if (b.y < -150) { b.active = false; setTimeout(spawnBubble, 500); }
     }
   }
