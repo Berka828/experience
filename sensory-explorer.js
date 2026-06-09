@@ -259,72 +259,79 @@ function drawSun(x, y, baseSize) {
     .some(p => dist(p.x, p.y, x, y) < baseSize * 1.45);
 
   if (touched) {
-    sunPulse = 34;
+    sunPulse = 14;
 
-    if (frameCount % 8 === 0) {
+    if (frameCount % 12 === 0) {
       sunBeams.push({
         x,
         y,
-        radius: baseSize,
-        alpha: 170
+        angle: random(TWO_PI),
+        length: baseSize * 0.8,
+        alpha: 95
       });
     }
 
-    if (frameCount % 14 === 0 && !safeGetChecked("calm-mode")) {
-      spawnExplosion(x, y, [255, 230, 80], 8);
+    if (frameCount % 22 === 0 && !safeGetChecked("calm-mode")) {
+      spawnExplosion(x, y, [255, 230, 120], 3);
     }
   }
 
-  if (sunPulse > 0) sunPulse *= 0.92;
+  if (sunPulse > 0) sunPulse *= 0.94;
 
-  for (let i = sunBeams.length - 1; i >= 0; i--) {
-    const beam = sunBeams[i];
-
-    noFill();
-    stroke(255, 230, 90, beam.alpha);
-    strokeWeight(4);
-    circle(beam.x, beam.y, beam.radius * 2);
-
-    beam.radius += 9;
-    beam.alpha -= 5;
-
-    if (beam.alpha <= 0) sunBeams.splice(i, 1);
-  }
-
-  const size = baseSize + sin(frameCount * 0.035) * 7 + sunPulse;
+  const size = baseSize + sin(frameCount * 0.025) * 4 + sunPulse;
 
   push();
   translate(x, y);
-  rotate(sin(frameCount * 0.01) * 0.12);
+  rotate(sin(frameCount * 0.006) * 0.08);
 
-  stroke(255, 220, 60, 145);
-  strokeWeight(5);
+  stroke(255, 220, 90, 120);
+  strokeWeight(4);
 
-  for (let a = 0; a < TWO_PI; a += PI / 16) {
-    const r1 = size * 0.62;
-    const r2 = size * 1.25 + sin(frameCount * 0.045 + a) * 12;
+  for (let a = 0; a < TWO_PI; a += PI / 18) {
+    const r1 = size * 0.65;
+    const r2 = size * 1.18 + sin(frameCount * 0.035 + a) * 7;
     line(cos(a) * r1, sin(a) * r1, cos(a) * r2, sin(a) * r2);
   }
 
   noStroke();
-  fill(255, 215, 40, 95);
-  circle(0, 0, size * 1.9);
+  fill(255, 215, 40, 75);
+  circle(0, 0, size * 1.75);
 
-  fill(255, 235, 80, 230);
+  fill(255, 235, 90, 220);
   circle(0, 0, size);
 
   if (safeGetChecked("whimsical-mode")) {
-    fill(0, 130);
+    fill(0, 105);
     arc(-18, -10, 24, 24, 0, PI);
     arc(18, -10, 24, 24, 0, PI);
 
     noFill();
-    stroke(0, 130);
+    stroke(0, 105);
     strokeWeight(3);
     arc(0, 16, 38, 26, 0, PI);
   }
 
   pop();
+
+  for (let i = sunBeams.length - 1; i >= 0; i--) {
+    const beam = sunBeams[i];
+
+    stroke(255, 225, 120, beam.alpha);
+    strokeWeight(5);
+    strokeCap(ROUND);
+
+    const sx = beam.x + cos(beam.angle) * baseSize * 0.55;
+    const sy = beam.y + sin(beam.angle) * baseSize * 0.55;
+    const ex = beam.x + cos(beam.angle) * beam.length;
+    const ey = beam.y + sin(beam.angle) * beam.length;
+
+    line(sx, sy, ex, ey);
+
+    beam.length += 2.5;
+    beam.alpha -= 2.2;
+
+    if (beam.alpha <= 0) sunBeams.splice(i, 1);
+  }
 }
 
 function drawNightSky() {
@@ -378,15 +385,21 @@ function drawNightSky() {
     .some(p => dist(p.x, p.y, moonX, moonY) < 110);
 
   if (touched) {
-    moonPulse = 28;
+    moonPulse = 13;
 
     if (frameCount % 10 === 0) {
       skyRings.push({
-        x: moonX,
-        y: moonY,
-        radius: 80,
-        alpha: 165
-      });
+  x: moonX,
+  y: moonY,
+  radius: 65,
+  alpha: 95,
+  color: random([
+    [190, 220, 255],
+    [210, 190, 255],
+    [180, 255, 230],
+    [255, 230, 190]
+  ])
+});
 
       for (let i = 0; i < 6; i++) {
         constellationDots.push({
@@ -409,12 +422,12 @@ function drawNightSky() {
     const r = skyRings[i];
 
     noFill();
-    stroke(220, 230, 255, r.alpha);
-    strokeWeight(3);
-    circle(r.x, r.y, r.radius * 2);
+    stroke(r.color[0], r.color[1], r.color[2], r.alpha);
+strokeWeight(2);
+circle(r.x, r.y, r.radius * 2);
 
-    r.radius += 6;
-    r.alpha -= 4;
+r.radius += 3.2;
+r.alpha -= 2.2;
 
     if (r.alpha <= 0) skyRings.splice(i, 1);
   }
