@@ -1,31 +1,39 @@
 // Bronx Children's Museum - Sensory Explorer
-// Replace your current sensory-explorer.js with this full file.
+// Full replacement script with better hands, finger outlines, feet, sun/moon, F fullscreen, and level customization.
 
 let video;
 let videoReady = false;
 let cameraError = "";
+
 let currentScene = 1;
 let score = 0;
 let isEnglish = true;
-let globalFlowers = Number(localStorage.getItem("bxcm_flowers") || 0);
 
 let isWiping = false;
 let wipeX = -2000;
 let nextScene = 1;
 
 let skyColor = [135, 206, 235];
-let isRainingInBronx = false;
-let particles = [];
+let isNightMode = false;
 
 let mpHands = null;
+let mpPose = null;
 let trackedHandsData = [];
+let trackedPoseData = null;
+
 let prevHandPositions = [];
 let handVelocity = 0;
+
 let activePointers = [];
 let activeBouncers = [];
 let activeFeet = [];
 
-let playerColors = [[0, 255, 255], [255, 0, 255], [255, 255, 0]];
+let particles = [];
+let playerColors = [
+  [0, 255, 255],
+  [255, 0, 255],
+  [255, 230, 0]
+];
 
 let smogGraphics;
 let smogCleared = 0;
@@ -35,80 +43,82 @@ let clouds = [];
 let raindrops = [];
 let flowers = [];
 let grass = [];
-let scene3Timer = 240;
+
 let artStrokes = [];
 let artEnergy = 0;
 let stars = [];
+
 let popBubbles = [];
 let bubblesPopped = 0;
-let sunSize = 180;
 let ripples = [];
 let fireflies = [];
+let sunPulse = 0;
+
+let levelSettings = {
+  level1Goal: 1200,
+  level2Trash: 10,
+  level3Flowers: 20,
+  level4Energy: 2000,
+  level5Bubbles: 30,
+  grabAssist: 1.8,
+  showHands: true,
+  showFeet: true,
+  showSkeletonLines: true
+};
 
 const textDict = {
   EN: {
     title: "Bronx Explorer 🌱",
-    lvl1: "Level 1: Wave your arms slowly to clear the smog.",
-    lvl2: "Level 2: Clean the river! Play with the fish!",
+    lvl1: "Level 1: Wave your hands to clear the smog.",
+    lvl2: "Level 2: Grab trash from the river and lift it out!",
     lvl3: "Level 3: Touch clouds to make rain. Grow the garden!",
-    lvl4: "Level 4: MAGIC CANVAS! Draw in the air with light!",
-    lvl5: "Level 5: Pop coral bubbles! Bounce the rest.",
-    win: "🎉 Beautiful job! Thank you! 🎉",
+    lvl4: "Level 4: Magic Canvas! Draw in the air with light.",
+    lvl5: "Level 5: Pop red coral bubbles. Bounce the rest.",
+    win: "Beautiful job! Thank you!",
     lvlText: "Level:",
     btn: "Español"
   },
   ES: {
     title: "Explorador 🌱",
-    lvl1: "Nivel 1: Agita tus brazos para limpiar el smog.",
-    lvl2: "Nivel 2: ¡Limpia el río! ¡Juega con los peces!",
+    lvl1: "Nivel 1: Usa tus manos para limpiar el smog.",
+    lvl2: "Nivel 2: Agarra basura del río y sácala.",
     lvl3: "Nivel 3: Toca las nubes. ¡Crece el jardín!",
-    lvl4: "Nivel 4: ¡LIENZO MÁGICO! ¡Dibuja en el aire con luz!",
-    lvl5: "Nivel 5: ¡Explota las burbujas rojas! Rebota las demás.",
-    win: "🎉 ¡Hermoso trabajo! ¡Gracias! 🎉",
+    lvl4: "Nivel 4: ¡Dibuja en el aire con luz!",
+    lvl5: "Nivel 5: Explota burbujas rojas. Rebota las demás.",
+    win: "¡Hermoso trabajo! ¡Gracias!",
     lvlText: "Nivel:",
     btn: "English"
   }
 };
-
-function safeSetText(id, txt) {
-  const el = document.getElementById(id);
-  if (el) el.innerText = txt;
-}
-
-function safeGetChecked(id) {
-  const el = document.getElementById(id);
-  return el ? el.checked : false;
-}
-
-function safeGetValue(id, defaultVal) {
-  const el = document.getElementById(id);
-  return el ? el.value : defaultVal;
-}
 
 function setup() {
   const canvas = createCanvas(windowWidth, windowHeight);
   canvas.position(0, 0);
   canvas.style("z-index", "0");
 
-  safeSetText("global-score", globalFlowers);
+  determineDayNight();
+  ensureCustomizationPanel();
   updateUI();
   initScene1();
 
-  const constraints = {
-    video: {
-      width: { ideal: 640 },
-      height: { ideal: 480 },
-      facingMode: "user"
-    },
-    audio: false
-  };
-
   try {
-    video = createCapture(constraints, () => {
-      videoReady = true;
-      setupTracking();
-      startMediaPipeTracker();
-    });
+    video = createCapture(
+      {
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user"
+        },
+        audio: false
+      },
+      () => {
+        videoReady = true;
+        setupHandsTracking();
+        setupPoseTracking();
+        startTrackingLoop();
+      }
+    );
+
     video.elt.setAttribute("playsinline", "true");
     video.hide();
   } catch (err) {
@@ -117,7 +127,7 @@ function setup() {
 }
 
 function draw() {
-  background(skyColor[0], skyColor[1], skyColor[2]);
+  drawSky();
 
   if (!videoReady || !video || !video.elt || video.elt.readyState < 2) {
     drawWaitingScreen();
@@ -139,9 +149,10 @@ function draw() {
   else if (currentScene === 5) drawScene5();
   else drawWinScene();
 
-  drawSkeletonsAndInteractions();
+  drawTrackedBodyParts();
 
   if (!safeGetChecked("calm-mode")) drawParticles();
+
   drawWipeIfNeeded();
 }
 
@@ -157,9 +168,108 @@ function drawWaitingScreen() {
   if (cameraError) text("Camera error: " + cameraError, width / 2, height / 2 + 45);
 }
 
-function setupTracking() {
+function determineDayNight() {
+  const hour = new Date().getHours();
+  isNightMode = hour < 6 || hour >= 18;
+
+  if (isNightMode) {
+    skyColor = [18, 24, 58];
+  } else {
+    skyColor = [135, 206, 235];
+  }
+}
+
+function drawSky() {
+  background(skyColor[0], skyColor[1], skyColor[2]);
+
+  if (isNightMode) {
+    drawNightSky();
+  } else {
+    drawSun(width - 160, 150, 95);
+  }
+}
+
+function drawSun(x, y, baseSize) {
+  const touched = activePointers.concat(activeBouncers).some(p => dist(p.x, p.y, x, y) < baseSize * 1.2);
+  if (touched) {
+    sunPulse = 28;
+    if (frameCount % 4 === 0 && !safeGetChecked("calm-mode")) {
+      spawnExplosion(x, y, [255, 230, 80]);
+    }
+  }
+
+  if (sunPulse > 0) sunPulse *= 0.9;
+
+  const size = baseSize + sin(frameCount * 0.04) * 5 + sunPulse;
+
+  push();
+  translate(x, y);
+
+  stroke(255, 220, 60, 165);
+  strokeWeight(6);
+  for (let a = 0; a < TWO_PI; a += PI / 12) {
+    const r1 = size * 0.65;
+    const r2 = size * 1.1 + sin(frameCount * 0.05 + a) * 8;
+    line(cos(a) * r1, sin(a) * r1, cos(a) * r2, sin(a) * r2);
+  }
+
+  noStroke();
+  fill(255, 215, 40, 130);
+  circle(0, 0, size * 1.7);
+
+  fill(255, 235, 80, 230);
+  circle(0, 0, size);
+
+  if (safeGetChecked("whimsical-mode")) {
+    fill(0);
+    arc(-18, -10, 24, 24, 0, PI);
+    arc(18, -10, 24, 24, 0, PI);
+    noFill();
+    stroke(0);
+    strokeWeight(3);
+    arc(0, 16, 36, 24, 0, PI);
+  }
+
+  pop();
+}
+
+function drawNightSky() {
+  if (stars.length < 120) {
+    stars = [];
+    for (let i = 0; i < 120; i++) {
+      stars.push({
+        x: random(width),
+        y: random(height * 0.7),
+        size: random(1, 4),
+        twinkle: random(TWO_PI)
+      });
+    }
+  }
+
+  for (const s of stars) {
+    fill(255, 255, 255, 110 + sin(frameCount * 0.05 + s.twinkle) * 90);
+    noStroke();
+    circle(s.x, s.y, s.size);
+  }
+
+  const moonX = width - 170;
+  const moonY = 145;
+  const touched = activePointers.concat(activeBouncers).some(p => dist(p.x, p.y, moonX, moonY) < 90);
+
+  if (touched && frameCount % 5 === 0 && !safeGetChecked("calm-mode")) {
+    spawnExplosion(moonX, moonY, [220, 230, 255]);
+  }
+
+  noStroke();
+  fill(235, 235, 220, 230);
+  circle(moonX, moonY, touched ? 125 : 105);
+  fill(skyColor[0], skyColor[1], skyColor[2]);
+  circle(moonX + 32, moonY - 14, touched ? 116 : 96);
+}
+
+function setupHandsTracking() {
   if (!window.Hands) {
-    console.error("MediaPipe Hands did not load. Check hands.js in index.html.");
+    console.warn("MediaPipe Hands did not load.");
     return;
   }
 
@@ -179,59 +289,108 @@ function setupTracking() {
   });
 }
 
-function startMediaPipeTracker() {
+function setupPoseTracking() {
+  if (!window.Pose) {
+    console.warn("MediaPipe Pose did not load. Feet tracking skipped.");
+    return;
+  }
+
+  mpPose = new window.Pose({
+    locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+  });
+
+  mpPose.setOptions({
+    modelComplexity: 1,
+    smoothLandmarks: true,
+    minDetectionConfidence: 0.35,
+    minTrackingConfidence: 0.35
+  });
+
+  mpPose.onResults(results => {
+    trackedPoseData = results.poseLandmarks || null;
+  });
+}
+
+function startTrackingLoop() {
   let isProcessing = false;
 
   async function processFrame() {
-    if (mpHands && video && video.elt && video.elt.readyState >= 2 && !isProcessing) {
+    if (video && video.elt && video.elt.readyState >= 2 && !isProcessing) {
       isProcessing = true;
+
       try {
-        await mpHands.send({ image: video.elt });
+        if (mpHands) await mpHands.send({ image: video.elt });
+        if (mpPose) await mpPose.send({ image: video.elt });
       } catch (e) {
-        console.warn("MediaPipe frame skipped", e);
+        console.warn("Tracking frame skipped", e);
       }
+
       isProcessing = false;
     }
+
     requestAnimationFrame(processFrame);
   }
 
   processFrame();
 }
 
-function drawSkeletonsAndInteractions() {
+function drawTrackedBodyParts() {
   handVelocity = 0;
   activePointers = [];
   activeBouncers = [];
   activeFeet = [];
 
+  drawFeetFromPose();
+  drawHandsFromMediaPipe();
+}
+
+function drawFeetFromPose() {
+  if (!trackedPoseData || !levelSettings.showFeet) return;
+
+  const footIndices = [27, 28, 31, 32];
+
+  for (let i = 0; i < footIndices.length; i++) {
+    const lm = trackedPoseData[footIndices[i]];
+    if (!lm || lm.visibility < 0.35) continue;
+
+    const x = width - lm.x * width;
+    const y = lm.y * height;
+
+    activeFeet.push({ x, y });
+
+    fill(255, 255, 255, 140);
+    stroke(0, 255, 255, 190);
+    strokeWeight(4);
+    ellipse(x, y, 82, 42);
+
+    fill(0, 255, 255, 200);
+    noStroke();
+    circle(x, y, 18);
+  }
+}
+
+function drawHandsFromMediaPipe() {
   const zoneWidth = width / 3;
 
   for (let k = 0; k < trackedHandsData.length; k++) {
     const landmarks = trackedHandsData[k];
-    const mappedLm = [];
+    const mapped = [];
 
     for (let i = 0; i < landmarks.length; i++) {
-      const mx = landmarks[i].x * width;
-      const my = landmarks[i].y * height;
-      mappedLm.push([width - mx, my]);
+      mapped.push([width - landmarks[i].x * width, landmarks[i].y * height]);
     }
 
-    const wrist = mappedLm[0];
-    const indexBase = mappedLm[5];
-    const indexTip = mappedLm[8];
-    const palmCenter = averagePoints([mappedLm[0], mappedLm[5], mappedLm[9], mappedLm[13], mappedLm[17]]);
+    const wrist = mapped[0];
+    const indexBase = mapped[5];
+    const indexTip = mapped[8];
+    const middleTip = mapped[12];
+    const ringTip = mapped[16];
+    const pinkyTip = mapped[20];
+    const thumbTip = mapped[4];
+
+    const palmCenter = averagePoints([mapped[0], mapped[5], mapped[9], mapped[13], mapped[17]]);
     const playerIndex = constrain(floor(palmCenter[0] / zoneWidth), 0, 2);
     const pColor = playerColors[playerIndex];
-
-    stroke(pColor[0], pColor[1], pColor[2], 180);
-    strokeWeight(8);
-    noFill();
-    line(wrist[0], wrist[1], indexTip[0], indexTip[1]);
-
-    fill(pColor[0], pColor[1], pColor[2], 190);
-    noStroke();
-    circle(indexTip[0], indexTip[1], 28);
-    circle(palmCenter[0], palmCenter[1], 42);
 
     if (prevHandPositions[k]) {
       handVelocity += dist(indexTip[0], indexTip[1], prevHandPositions[k][0], prevHandPositions[k][1]);
@@ -239,28 +398,90 @@ function drawSkeletonsAndInteractions() {
     prevHandPositions[k] = indexTip;
 
     const palmSize = dist(wrist[0], wrist[1], indexBase[0], indexBase[1]);
-    const indexExt = dist(wrist[0], wrist[1], indexTip[0], indexTip[1]);
-    const isGrabbing = indexExt < palmSize * 1.7;
+    const fingertipAvg = averagePoints([thumbTip, indexTip, middleTip, ringTip, pinkyTip]);
+    const grabDistance = dist(fingertipAvg[0], fingertipAvg[1], palmCenter[0], palmCenter[1]);
+    const isGrabbing = grabDistance < palmSize * levelSettings.grabAssist;
+
+    if (levelSettings.showHands) {
+      drawBetterHand(mapped, pColor, isGrabbing);
+    }
 
     if (isGrabbing) {
-      activeBouncers.push({ x: palmCenter[0], y: palmCenter[1], id: k, color: pColor });
-      if (palmCenter[1] > height * 0.7) activeFeet.push({ x: palmCenter[0], y: palmCenter[1] });
+      activeBouncers.push({
+        x: palmCenter[0],
+        y: palmCenter[1],
+        id: k,
+        color: pColor
+      });
+
+      if (palmCenter[1] > height * 0.7) {
+        activeFeet.push({ x: palmCenter[0], y: palmCenter[1] });
+      }
+
       handleTrashDragging(k, palmCenter);
     } else {
-      activePointers.push({ x: indexTip[0], y: indexTip[1], color: pColor });
+      activePointers.push({
+        x: indexTip[0],
+        y: indexTip[1],
+        color: pColor
+      });
+
       releaseTrash(k);
     }
   }
 }
 
-function averagePoints(points) {
-  let x = 0;
-  let y = 0;
-  for (const p of points) {
-    x += p[0];
-    y += p[1];
+function drawBetterHand(lm, color, isGrabbing) {
+  const palm = [0, 5, 9, 13, 17];
+  const fingers = [
+    [0, 1, 2, 3, 4],
+    [0, 5, 6, 7, 8],
+    [0, 9, 10, 11, 12],
+    [0, 13, 14, 15, 16],
+    [0, 17, 18, 19, 20]
+  ];
+
+  if (levelSettings.showSkeletonLines) {
+    stroke(color[0], color[1], color[2], 210);
+    strokeWeight(8);
+    strokeCap(ROUND);
+
+    for (const finger of fingers) {
+      for (let i = 0; i < finger.length - 1; i++) {
+        const a = lm[finger[i]];
+        const b = lm[finger[i + 1]];
+        line(a[0], a[1], b[0], b[1]);
+      }
+    }
+
+    noFill();
+    strokeWeight(6);
+    beginShape();
+    for (const idx of palm) vertex(lm[idx][0], lm[idx][1]);
+    endShape(CLOSE);
   }
-  return [x / points.length, y / points.length];
+
+  const palmCenter = averagePoints([lm[0], lm[5], lm[9], lm[13], lm[17]]);
+
+  fill(color[0], color[1], color[2], isGrabbing ? 95 : 55);
+  stroke(255, 255, 255, 210);
+  strokeWeight(3);
+  ellipse(palmCenter[0], palmCenter[1], isGrabbing ? 92 : 72, isGrabbing ? 82 : 64);
+
+  const tips = [4, 8, 12, 16, 20];
+  for (const idx of tips) {
+    fill(255, 255, 255, 225);
+    stroke(color[0], color[1], color[2], 230);
+    strokeWeight(4);
+    circle(lm[idx][0], lm[idx][1], isGrabbing ? 30 : 24);
+  }
+
+  if (isGrabbing) {
+    noFill();
+    stroke(255, 255, 255, 190);
+    strokeWeight(5);
+    circle(palmCenter[0], palmCenter[1], 105);
+  }
 }
 
 function initScene1() {
@@ -280,11 +501,11 @@ function initScene2() {
   trashItems = [];
   fishes = [];
 
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < levelSettings.level2Trash; i++) {
     trashItems.push({
       x: random(100, width - 100),
       y: height * 0.72 + random(-30, 30),
-      radius: random(22, 36),
+      radius: random(24, 38),
       active: true,
       draggedBy: null
     });
@@ -304,7 +525,6 @@ function initScene3() {
   raindrops = [];
   flowers = [];
   grass = [];
-  scene3Timer = 240;
 
   for (let i = 0; i < 5; i++) {
     clouds.push({
@@ -323,16 +543,6 @@ function initScene3() {
 function initScene4() {
   artStrokes = [];
   artEnergy = 0;
-  stars = [];
-
-  for (let i = 0; i < 150; i++) {
-    stars.push({
-      x: random(width),
-      y: random(height),
-      size: random(1, 5),
-      twinkle: random(TWO_PI)
-    });
-  }
 }
 
 function initScene5() {
@@ -357,13 +567,15 @@ function drawScenicBackground() {
   noStroke();
 
   if (currentScene === 1) {
-    fill(80, 85, 95, 160);
+    fill(80, 85, 95, 150);
     rect(width * 0.1, height - 300, 150, 300);
     rect(width * 0.3, height - 400, 120, 400);
     rect(width * 0.6, height - 250, 200, 250);
     rect(width * 0.8, height - 350, 100, 350);
-  } else if (currentScene === 2 || currentScene === 3) {
-    fill(34, 139, 34, 100);
+  }
+
+  if (currentScene === 2 || currentScene === 3) {
+    fill(34, 139, 34, 90);
     ellipse(width * 0.3, height, width * 0.8, 600);
     fill(34, 139, 34, 120);
     ellipse(width * 0.8, height, width, 500);
@@ -372,19 +584,22 @@ function drawScenicBackground() {
 
 function drawScene1() {
   if (handVelocity > 5 && !isWiping && smogGraphics) {
-    const allErasers = activePointers.concat(activeBouncers);
+    const erasers = activePointers.concat(activeBouncers, activeFeet);
     smogGraphics.erase();
 
-    for (const pt of allErasers) {
-      smogGraphics.circle(pt.x, pt.y, 220);
-      smogCleared += 0.5;
+    for (const pt of erasers) {
+      smogGraphics.circle(pt.x, pt.y, 240);
+      smogCleared += 0.55;
     }
 
     smogGraphics.noErase();
   }
 
   if (smogGraphics) image(smogGraphics, 0, 0);
-  if (smogCleared > 1200 && !isWiping) triggerWipeTransition(2);
+
+  if (smogCleared > levelSettings.level1Goal && !isWiping) {
+    triggerWipeTransition(2);
+  }
 }
 
 function drawScene2() {
@@ -404,7 +619,7 @@ function drawScene2() {
     if (f.x < 20 || f.x > width - 20) f.vx *= -1;
 
     for (const b of activeBouncers) {
-      if (dist(b.x, b.y, f.x, f.y) < 80) {
+      if (dist(b.x, b.y, f.x, f.y) < 90) {
         f.vx = f.x > b.x ? abs(f.vx) : -abs(f.vx);
       }
     }
@@ -422,14 +637,13 @@ function drawScene2() {
 
   for (const t of trashItems) {
     if (!t.active) continue;
-
     activeCount++;
 
     if (t.draggedBy === null) {
       t.y = height * 0.72 + sin(frameCount * 0.05 + t.x * 0.01) * 15;
     }
 
-    fill(220, 50, 50, 210);
+    fill(220, 50, 50, 215);
     noStroke();
     circle(t.x, t.y, t.radius * 2);
 
@@ -444,9 +658,7 @@ function drawScene2() {
       score += 20;
       updateScore();
 
-      if (!safeGetChecked("calm-mode")) {
-        spawnExplosion(t.x, t.y, [220, 50, 50]);
-      }
+      if (!safeGetChecked("calm-mode")) spawnExplosion(t.x, t.y, [220, 50, 50]);
     }
   }
 
@@ -474,7 +686,7 @@ function drawScene3() {
 
     const touched = activePointers.concat(activeBouncers).some(p => dist(p.x, p.y, c.x, c.y) < c.w / 2);
 
-    if ((touched || isRainingInBronx) && frameCount % 6 === 0) {
+    if (touched && frameCount % 6 === 0) {
       raindrops.push({ x: c.x + random(-100, 100), y: c.y + 50, active: true });
     }
   }
@@ -506,13 +718,12 @@ function drawScene3() {
         }
       }
 
-      if (!watered && flowers.length < 25) {
+      if (!watered && flowers.length < 30) {
         flowers.push({
           x: r.x,
           size: 5,
           maxSize: random(45, 80),
-          type: floor(random(3)),
-          cooldown: 0
+          type: floor(random(3))
         });
       }
     }
@@ -549,28 +760,27 @@ function drawScene3() {
     }
   }
 
-  if (grownFlowers >= 20) {
-    scene3Timer--;
-    if (scene3Timer <= 0 && !isWiping) triggerWipeTransition(4);
+  if (grownFlowers >= levelSettings.level3Flowers && !isWiping) {
+    triggerWipeTransition(4);
   }
 }
 
 function drawScene4() {
-  background(20, 10, 40, 170);
+  background(20, 10, 40, 150);
 
-  for (const s of stars) {
-    fill(255, 255, 255, 100 + sin(frameCount * 0.05 + s.twinkle) * 100);
+  for (let i = 0; i < 90; i++) {
+    fill(255, 255, 255, 80 + sin(frameCount * 0.03 + i) * 70);
     noStroke();
-    circle(s.x, s.y, s.size);
+    circle((i * 97) % width, (i * 53) % height, 2);
   }
 
   fill(50, 50, 50, 210);
   rect(width / 2 - 200, 30, 400, 30, 15);
 
   fill(255, 204, 0);
-  rect(width / 2 - 200, 30, constrain(map(artEnergy, 0, 2000, 0, 400), 0, 400), 30, 15);
+  rect(width / 2 - 200, 30, constrain(map(artEnergy, 0, levelSettings.level4Energy, 0, 400), 0, 400), 30, 15);
 
-  const brushes = activePointers.concat(activeBouncers);
+  const brushes = activePointers.concat(activeBouncers, activeFeet);
 
   for (const brush of brushes) {
     if (frameCount % 2 === 0 && handVelocity > 2) {
@@ -602,32 +812,12 @@ function drawScene4() {
 
   pop();
 
-  if (artEnergy >= 2000 && !isWiping) triggerWipeTransition(5);
+  if (artEnergy >= levelSettings.level4Energy && !isWiping) {
+    triggerWipeTransition(5);
+  }
 }
 
 function drawScene5() {
-  const sunX = width - 180;
-  const sunY = 180;
-
-  sunSize = 180 + sin(frameCount * 0.02) * 8;
-
-  noStroke();
-  fill(255, 204, 0, 110);
-  circle(sunX, sunY, sunSize);
-
-  fill(255, 255, 0, 190);
-  circle(sunX, sunY, sunSize - 30);
-
-  if (safeGetChecked("whimsical-mode")) {
-    fill(0);
-    arc(sunX - 25, sunY - 10, 35, 35, 0, PI);
-    arc(sunX + 25, sunY - 10, 35, 35, 0, PI);
-    noFill();
-    stroke(0);
-    strokeWeight(4);
-    arc(sunX, sunY + 20, 35, 30, 0, PI);
-  }
-
   for (const f of fireflies) {
     f.x += f.vx + sin(frameCount * 0.05) * 0.5;
     f.y += f.vy + cos(frameCount * 0.05) * 0.5;
@@ -670,8 +860,8 @@ function drawScene5() {
 
     if (b.x < b.radius || b.x > width - b.radius) b.vx *= -1;
 
-    for (const kicker of activeBouncers) {
-      if (dist(kicker.x, kicker.y, b.x, b.y) < b.radius + 40) {
+    for (const kicker of activeBouncers.concat(activeFeet)) {
+      if (dist(kicker.x, kicker.y, b.x, b.y) < b.radius + 50) {
         const angle = atan2(b.y - kicker.y, b.x - kicker.x);
         b.vx = cos(angle) * 7;
         b.vy = sin(angle) * 7 - 2;
@@ -680,11 +870,10 @@ function drawScene5() {
     }
 
     const pointed = activePointers.some(p => dist(p.x, p.y, b.x, b.y) < b.radius);
-    const steppedOn = b.y > height - b.radius && activeFeet.some(foot => dist(foot.x, foot.y, b.x, b.y) < b.radius + 50);
 
-    if (pointed || steppedOn) {
+    if (pointed) {
       if (b.isRed) popBubble(b);
-      else if (pointed) b.vy = -3;
+      else b.vy = -3;
     } else if (b.y > height - b.radius) {
       b.vy = -6;
     }
@@ -695,7 +884,9 @@ function drawScene5() {
     }
   }
 
-  if (bubblesPopped >= 30 && !isWiping) triggerWipeTransition(6);
+  if (bubblesPopped >= levelSettings.level5Bubbles && !isWiping) {
+    triggerWipeTransition(6);
+  }
 }
 
 function drawWinScene() {
@@ -729,7 +920,7 @@ function handleTrashDragging(k, palmCenter) {
 
   if (!holding) {
     for (const t of trashItems) {
-      if (t.active && t.draggedBy === null && dist(palmCenter[0], palmCenter[1], t.x, t.y) < t.radius * 2.5) {
+      if (t.active && t.draggedBy === null && dist(palmCenter[0], palmCenter[1], t.x, t.y) < t.radius * 3.3) {
         t.draggedBy = k;
         break;
       }
@@ -849,6 +1040,14 @@ function drawGiantCloudWipe(xPos) {
   ellipse(xPos - 600, height / 2, 1500, 2000);
 }
 
+function reinitCurrentScene() {
+  if (currentScene === 1) initScene1();
+  else if (currentScene === 2) initScene2();
+  else if (currentScene === 3) initScene3();
+  else if (currentScene === 4) initScene4();
+  else if (currentScene === 5) initScene5();
+}
+
 function updateScore() {
   safeSetText("score", score);
 }
@@ -869,12 +1068,105 @@ function updateUI() {
   else safeSetText("instructions", lang.win);
 }
 
-function reinitCurrentScene() {
-  if (currentScene === 1) initScene1();
-  else if (currentScene === 2) initScene2();
-  else if (currentScene === 3) initScene3();
-  else if (currentScene === 4) initScene4();
-  else if (currentScene === 5) initScene5();
+function ensureCustomizationPanel() {
+  const panel = document.getElementById("settings-panel");
+  if (!panel) return;
+
+  panel.innerHTML = `
+    <h3>Exhibit Customization</h3>
+
+    <label>Bubble Size:
+      <input type="range" id="bubble-size" min="30" max="90" value="45">
+    </label><br><br>
+
+    <label>Level 1 Smog Goal:
+      <input type="range" id="level1-goal" min="400" max="2500" value="${levelSettings.level1Goal}">
+    </label><br><br>
+
+    <label>Level 2 Trash Count:
+      <input type="range" id="level2-trash" min="3" max="25" value="${levelSettings.level2Trash}">
+    </label><br><br>
+
+    <label>Level 3 Flower Goal:
+      <input type="range" id="level3-flowers" min="5" max="30" value="${levelSettings.level3Flowers}">
+    </label><br><br>
+
+    <label>Level 4 Drawing Goal:
+      <input type="range" id="level4-energy" min="500" max="5000" value="${levelSettings.level4Energy}">
+    </label><br><br>
+
+    <label>Level 5 Bubble Goal:
+      <input type="range" id="level5-bubbles" min="5" max="60" value="${levelSettings.level5Bubbles}">
+    </label><br><br>
+
+    <label>Grab Assist:
+      <input type="range" id="grab-assist" min="12" max="30" value="18">
+    </label><br><br>
+
+    <label>Show Hands:
+      <input type="checkbox" id="show-hands" checked>
+    </label><br><br>
+
+    <label>Show Feet:
+      <input type="checkbox" id="show-feet" checked>
+    </label><br><br>
+
+    <label>Show Skeleton Lines:
+      <input type="checkbox" id="show-lines" checked>
+    </label><br><br>
+
+    <label>Calm Mode:
+      <input type="checkbox" id="calm-mode">
+    </label><br><br>
+
+    <label>Whimsical Faces:
+      <input type="checkbox" id="whimsical-mode" checked>
+    </label><br><br>
+
+    <button onclick="applyCustomization()">Apply Changes</button>
+    <button onclick="toggleSettings()">Close</button>
+  `;
+}
+
+function applyCustomization() {
+  levelSettings.level1Goal = Number(safeGetValue("level1-goal", 1200));
+  levelSettings.level2Trash = Number(safeGetValue("level2-trash", 10));
+  levelSettings.level3Flowers = Number(safeGetValue("level3-flowers", 20));
+  levelSettings.level4Energy = Number(safeGetValue("level4-energy", 2000));
+  levelSettings.level5Bubbles = Number(safeGetValue("level5-bubbles", 30));
+  levelSettings.grabAssist = Number(safeGetValue("grab-assist", 18)) / 10;
+  levelSettings.showHands = safeGetChecked("show-hands");
+  levelSettings.showFeet = safeGetChecked("show-feet");
+  levelSettings.showSkeletonLines = safeGetChecked("show-lines");
+
+  reinitCurrentScene();
+}
+
+function safeSetText(id, txt) {
+  const el = document.getElementById(id);
+  if (el) el.innerText = txt;
+}
+
+function safeGetChecked(id) {
+  const el = document.getElementById(id);
+  return el ? el.checked : false;
+}
+
+function safeGetValue(id, defaultVal) {
+  const el = document.getElementById(id);
+  return el ? el.value : defaultVal;
+}
+
+function averagePoints(points) {
+  let x = 0;
+  let y = 0;
+
+  for (const p of points) {
+    x += p[0];
+    y += p[1];
+  }
+
+  return [x / points.length, y / points.length];
 }
 
 function windowResized() {
@@ -886,6 +1178,7 @@ function resetGame() {
   score = 0;
   currentScene = 1;
   updateScore();
+  updateUI();
   initScene1();
 }
 
@@ -905,4 +1198,16 @@ function toggleFullscreen() {
 
   const btn = document.getElementById("fs-btn");
   if (btn) btn.innerText = !fs ? "↙ Exit Fullscreen" : "⛶ Fullscreen";
+}
+
+function keyPressed() {
+  if (key === "f" || key === "F") {
+    toggleFullscreen();
+  }
+
+  if (key >= "1" && key <= "6") {
+    currentScene = Number(key);
+    updateUI();
+    reinitCurrentScene();
+  }
 }
