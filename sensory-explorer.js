@@ -8,42 +8,32 @@ let score = 0;
 let isEnglish = true;
 let globalFlowers = localStorage.getItem('bxcm_flowers') || 0;
 
-let fadeState = 0; 
-let fadeAlpha = 0;
-let nextScene = 1;
-
-// Cloud Wipe Transition Engine
 let isWiping = false;
 let wipeX = -2000;
+let nextScene = 1;
 
-// Weather & Environments
 let skyColor = [135, 206, 235]; 
 let isRainingInBronx = false;
 let particles = [];
 
-// AI Tracking Globals
+// Stable Hand Tracking Globals
 let mpHands;
 let trackedHandsData = [];
-let poses = []; 
 let prevHandPositions = [];
 let handVelocity = 0;
 let activePointers = []; 
 let activeBouncers = []; 
-let activeFeet = []; 
+let activeFeet = []; // Falls back to lower hands for bouncers in pure hand-mode
 
-// Colors
+// Brand Colors
 let bxcmColors = [ [44, 94, 79], [26, 26, 46], [255, 204, 0], [255, 107, 107] ];
-let playerColors = [ [0, 255, 255], [255, 0, 255], [255, 255, 0], [50, 255, 50] ];
+let playerColors = [ [0, 255, 255], [255, 0, 255], [255, 255, 0] ];
 
 // Level Objects
 let smogGraphics; let smogCleared = 0;
 let trashItems = []; let fishes = []; 
 let clouds = []; let raindrops = []; let flowers = []; let grass = []; let insects = []; let scene3Timer = 0;
-
-// Level 4 (Magic Canvas) Objects
 let artStrokes = []; let artEnergy = 0; let stars = [];
-
-// Level 5 (Bubbles) Objects
 let popBubbles = []; let bubblesPopped = 0; let sunSize = 180;
 let ripples = []; let fireflies = []; 
 
@@ -87,16 +77,18 @@ function setup() {
 
   fetchLiveWeather(); updateUI(); initScene1(); 
   
+  // Clean initialization callback
   video = createCapture(VIDEO, () => { 
     video.elt.width = 640; video.elt.height = 480; 
-    setupTracking(video); startMediaPipeTracker(video);
+    setupTracking(video); 
+    startMediaPipeTracker(video);
     videoReady = true; 
   });
   video.hide(); 
 }
 
 function draw() {
-  background(skyColor[0], skyColor[1], skyColor[2], 120); 
+  background(skyColor[0], skyColor, skyColor, 120); 
 
   if (!videoReady) {
     fill(255); noStroke(); textAlign(CENTER, CENTER); textSize(32);
@@ -147,7 +139,7 @@ function windowResized() {
 }
 
 // ==========================================
-// 3. SCENIC BACKGROUNDS & API
+// 3. WEATHER & API SYSTEM
 // ==========================================
 async function fetchLiveWeather() {
   try {
@@ -192,7 +184,7 @@ class Particle {
     this.life = 255; this.color = color; 
   }
   update() { this.x += this.vx; this.y += this.vy; this.life -= 10; }
-  show() { noStroke(); fill(this.color[0], this.color[1], this.color[2], this.life); circle(this.x, this.y, 8); }
+  show() { noStroke(); fill(this.color[0], this.color, this.color, this.life); circle(this.x, this.y, 8); }
 }
 function spawnExplosion(x, y, color) { for (let i = 0; i < 20; i++) particles.push(new Particle(x, y, color)); }
 function drawParticles() {
@@ -203,14 +195,12 @@ function drawParticles() {
 }
 
 // ==========================================
-// 5. TRUE SKELETON AI TRACKING
+// 5. STABLE MEDIAPIPE TRACKING
 // ==========================================
 function setupTracking(videoElement) {
   mpHands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
   mpHands.setOptions({ maxNumHands: 6, modelComplexity: 1, minDetectionConfidence: 0.3, minTrackingConfidence: 0.3 });
   mpHands.onResults(onHandResults);
-  let poseNet = ml5.poseNet(videoElement, () => console.log('Body tracking ready!'));
-  poseNet.on('pose', results => poses = results);
 }
 
 async function startMediaPipeTracker(videoElement) {
@@ -230,64 +220,47 @@ function onHandResults(results) { trackedHandsData = results.multiHandLandmarks 
 
 function drawSkeletonsAndInteractions() {
   handVelocity = 0; activePointers = []; activeBouncers = []; activeFeet = [];
-  let vw = video.width || 640; let vh = video.height || 480;
-
-  for (let i = 0; i < poses.length; i++) {
-    let pose = poses[i].pose;
-    let pColor = playerColors[i % playerColors.length];
-
-    if (pose.leftWrist.confidence > 0.2) activeBouncers.push({ x: width - map(pose.leftWrist.x, 0, vw, 0, width), y: map(pose.leftWrist.y, 0, vh, 0, height), bodyId: i, color: pColor });
-    if (pose.rightWrist.confidence > 0.2) activeBouncers.push({ x: width - map(pose.rightWrist.x, 0, vw, 0, width), y: map(pose.rightWrist.y, 0, vh, 0, height), bodyId: i, color: pColor });
-    if (pose.leftAnkle.confidence > 0.2) {
-      let px = width - map(pose.leftAnkle.x, 0, vw, 0, width); let py = map(pose.leftAnkle.y, 0, vh, 0, height);
-      activeBouncers.push({ x: px, y: py, bodyId: i, color: pColor }); activeFeet.push({ x: px, y: py });
-    }
-    if (pose.rightAnkle.confidence > 0.2) {
-      let px = width - map(pose.rightAnkle.x, 0, vw, 0, width); let py = map(pose.rightAnkle.y, 0, vh, 0, height);
-      activeBouncers.push({ x: px, y: py, bodyId: i, color: pColor }); activeFeet.push({ x: px, y: py });
-    }
-  }
+  let zoneWidth = width / 3;
 
   for (let k = 0; k < trackedHandsData.length; k++) {
     let landmarks = trackedHandsData[k];
-    let mappedLm = landmarks.map(lm => [width - map(lm.x, 0, 1, 0, width), map(lm.y, 0, 1, 0, height)]);
+    let mappedLm = landmarks.map(lm =>);
     
-    let wrist = mappedLm[0]; let indexBase = mappedLm[5]; let indexTip = mappedLm[8]; let palmCenter = mappedLm[9];
+    let wrist = mappedLm[0]; let indexBase = mappedLm; let indexTip = mappedLm; let palmCenter = mappedLm;
     
-    let closestBodyId = 0; let minD = 9999;
-    for (let i = 0; i < poses.length; i++) {
-      let pose = poses[i].pose;
-      let lw = { x: width - map(pose.leftWrist.x, 0, vw, 0, width), y: map(pose.leftWrist.y, 0, vh, 0, height) };
-      let rw = { x: width - map(pose.rightWrist.x, 0, vw, 0, width), y: map(pose.rightWrist.y, 0, vh, 0, height) };
-      let dL = dist(wrist[0], wrist[1], lw.x, lw.y); let dR = dist(wrist[0], wrist[1], rw.x, rw.y);
-      if (dL < minD) { minD = dL; closestBodyId = i; }
-      if (dR < minD) { minD = dR; closestBodyId = i; }
-    }
+    // Stable pairing based on palm location zones
+    let playerIndex = constrain(Math.floor(palmCenter[0] / zoneWidth), 0, 2);
+    let pColor = playerColors[playerIndex];
+
+    stroke(pColor[0], pColor, pColor, 120); strokeWeight(6); noFill();
+    beginShape(); for (let j = 0; j < 21; j++) vertex(mappedLm[j][0], mappedLm[j]); endShape();
     
-    let pColor = playerColors[closestBodyId % playerColors.length];
-    stroke(pColor[0], pColor[1], pColor[2], 120); strokeWeight(6); noFill();
-    beginShape(); for (let j = 0; j < 21; j++) vertex(mappedLm[j][0], mappedLm[j][1]); endShape();
-    
-    if (prevHandPositions[k]) handVelocity += dist(indexTip[0], indexTip[1], prevHandPositions[k][0], prevHandPositions[k][1]);
+    if (prevHandPositions[k]) handVelocity += dist(indexTip[0], indexTip, prevHandPositions[k][0], prevHandPositions[k]);
     prevHandPositions[k] = indexTip;
 
-    let palmSize = dist(wrist[0], wrist[1], indexBase[0], indexBase[1]);
-    let indexExt = dist(wrist[0], wrist[1], indexTip[0], indexTip[1]);
+    let palmSize = dist(wrist[0], wrist, indexBase[0], indexBase);
+    let indexExt = dist(wrist[0], wrist, indexTip[0], indexTip);
     let isGrabbing = (indexExt < palmSize * 1.5); 
 
     if (isGrabbing) {
-      fill(255, 255, 255, 100); noStroke(); circle(palmCenter[0], palmCenter[1], 50); 
-      activeBouncers.push({ x: palmCenter[0], y: palmCenter[1], id: k, color: pColor }); 
+      fill(255, 255, 255, 100); noStroke(); circle(palmCenter[0], palmCenter, 50); 
+      activeBouncers.push({ x: palmCenter[0], y: palmCenter, id: k, color: pColor }); 
+      
+      // Fallback: Low hands in bubble level count as feet (stepping)
+      if (palmCenter > height * 0.7) {
+        activeFeet.push({ x: palmCenter[0], y: palmCenter });
+      }
+
       if (currentScene === 2) {
         let holding = false;
-        for (let t of trashItems) { if (t.active && t.draggedBy === k) { t.x = palmCenter[0]; t.y = palmCenter[1]; holding = true; } }
+        for (let t of trashItems) { if (t.active && t.draggedBy === k) { t.x = palmCenter[0]; t.y = palmCenter; holding = true; } }
         if (!holding) {
-          for (let t of trashItems) { if (t.active && !t.draggedBy && dist(palmCenter[0], palmCenter[1], t.x, t.y) < t.radius * 2.5) { t.draggedBy = k; break; } }
+          for (let t of trashItems) { if (t.active && !t.draggedBy && dist(palmCenter[0], palmCenter, t.x, t.y) < t.radius * 2.5) { t.draggedBy = k; break; } }
         }
       }
     } else {
-      fill(255); noStroke(); circle(indexTip[0], indexTip[1], 15);
-      activePointers.push({ x: indexTip[0], y: indexTip[1], color: pColor }); 
+      fill(255); noStroke(); circle(indexTip[0], indexTip, 15);
+      activePointers.push({ x: indexTip[0], y: indexTip, color: pColor }); 
       if (currentScene === 2) { for (let t of trashItems) if (t.draggedBy === k) t.draggedBy = null; }
     }
   }
@@ -320,14 +293,13 @@ function initScene5() {
 function spawnBubble() { 
   let baseSize = parseInt(safeGetValue('bubble-size', 45));
   let isRed = random() < 0.4; 
-  let bColor = isRed ? bxcmColors[3] : random([bxcmColors[0], bxcmColors[1], bxcmColors[2]]);
+  let bColor = isRed ? bxcmColors : random([bxcmColors[0], bxcmColors, bxcmColors]);
   popBubbles.push({ 
     x: random(100, width-100), y: -100, vx: random(-1, 1), vy: random(2, 4), 
     radius: baseSize + random(-10, 10), isRed: isRed, color: bColor, active: true 
   }); 
 }
 
-// LEVEL 1: SMOG
 function drawScene1() {
   if (handVelocity > 5 && !isWiping) { 
     let allErasers = activePointers.concat(activeBouncers);
@@ -339,7 +311,6 @@ function drawScene1() {
   if (smogCleared > 1200 && !isWiping) triggerWipeTransition(2);
 }
 
-// LEVEL 2: LIVING RIVER
 function drawScene2() {
   fill(0, 100, 200, 150); noStroke();
   beginShape(); vertex(0, height);
@@ -372,7 +343,6 @@ function drawScene2() {
   if (activeCount === 0 && !isWiping) triggerWipeTransition(3);
 }
 
-// LEVEL 3: GARDEN 
 function drawScene3() {
   noStroke(); fill(101, 67, 33, 150); rect(0, height - 120, width, 120); 
   
@@ -414,4 +384,44 @@ function drawScene3() {
     if (f.size >= f.maxSize) {
       grownFlowers++;
       let fTouched = false; 
-      for(let p of activePointers) if(dist(p.x, p.y, f.x, fCenterY) < 40) fTouched = 
+      for(let p of activePointers) if(dist(p.x, p.y, f.x, fCenterY) < 40) fTouched = true;
+      for(let b of activeBouncers) if(dist(b.x, b.y, f.x, fCenterY) < 40) fTouched = true;
+
+      if (fTouched && f.cooldown <= 0) {
+        if (f.type === 0) insects.push({ x: f.x, y: fCenterY, vx: random(-2, 2), vy: random(-2, -5), emoji: '🦋', life: 255 });
+        else if (f.type === 1) insects.push({ x: f.x, y: fCenterY, vx: random(-2, 2), vy: random(-2, -5), emoji: '🐝', life: 255 });
+        else spawnExplosion(f.x, fCenterY, [255, 215, 0]); 
+        f.cooldown = 150; 
+      }
+    }
+    if (f.cooldown > 0) f.cooldown--;
+    
+    fill(46, 204, 113, 200); noStroke(); rect(f.x - 3, fCenterY, 6, f.size); 
+    if (f.type === 0) { fill(255, 105, 180, 220); ellipse(f.x, fCenterY - 10, f.size/1.5, f.size); } 
+    else if (f.type === 1) { fill(255, 215, 0, 220); for(let a=0; a<TWO_PI; a+=PI/4) ellipse(f.x + cos(a)*15, fCenterY - 15 + sin(a)*15, 15, 15); fill(139, 69, 19); circle(f.x, fCenterY - 15, 20); } 
+    else { fill(200, 100, 255, 220); for(let a=0; a<TWO_PI; a+=PI/3) ellipse(f.x + cos(a)*12, fCenterY - 10 + sin(a)*12, 12, 12); fill(255, 255, 0); circle(f.x, fCenterY - 10, 15); }
+  }
+
+  for (let i = insects.length - 1; i >= 0; i--) {
+    let ins = insects[i];
+    ins.x += ins.vx + sin(frameCount * 0.1); ins.y += ins.vy; ins.life -= 1.5;
+    textSize(35); textAlign(CENTER, CENTER); text(ins.emoji, ins.x, ins.y);
+    if (ins.life <= 0 || ins.y < -50) insects.splice(i, 1);
+  }
+
+  if (grownFlowers >= 20) {
+    scene3Timer--;
+    if (scene3Timer <= 0 && !isWiping) triggerWipeTransition(4);
+  }
+}
+
+// LEVEL 4: MAGIC CANVAS
+function drawScene4() {
+  background(20, 10, 40, 150); 
+
+  for(let s of stars) {
+    fill(255, 255, 255, 100 + sin(frameCount * 0.05 + s.twinkle) * 100);
+    noStroke(); circle(s.x, s.y, s.size);
+  }
+
+  fill(50, 50, 50, 200); rect(width
