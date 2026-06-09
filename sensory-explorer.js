@@ -1,25 +1,68 @@
 // Bronx Children's Museum - Sensory Explorer
-// Calm sensory exhibit version.
+// Calm sensory exhibit version with day-to-night journey, softer transitions,
+// subtle hand/feet tracking, responsive sun/moon, flowers, bubbles, and drawing.
 
 let video, videoReady = false, cameraError = "";
-let currentScene = 1, score = 0, isEnglish = true;
-let isWiping = false, wipeX = -2000, nextScene = 1, transitionAlpha = 0;
-let sceneCompleteHold = 0, sceneCompleteMessage = "";
-let skyColor = [135, 206, 235], isNightMode = false;
 
-let mpHands = null, mpPose = null;
-let trackedHandsData = [], trackedPoseData = null;
-let prevHandPositions = [], handVelocity = 0;
-let activePointers = [], activeBouncers = [], activeFeet = [];
-let particles = [], gentleCreatures = [];
+let appStarted = false;
+let introAlpha = 255;
 
-let playerColors = [[0, 255, 255], [255, 0, 255], [255, 230, 0]];
+let currentScene = 1;
+let score = 0;
+let isEnglish = true;
 
-let smogGraphics, smogCleared = 0;
-let trashItems = [], fishes = [];
-let clouds = [], raindrops = [], flowers = [], grass = [];
-let artStrokes = [], artEnergy = 0, stars = [];
-let popBubbles = [], bubblesPopped = 0, ripples = [], fireflies = [];
+let isWiping = false;
+let nextScene = 1;
+let transitionAlpha = 0;
+
+let sceneCompleteHold = 0;
+let sceneCompleteMessage = "";
+
+let skyColor = [135, 206, 235];
+let dayNightBlend = 0;
+let targetNightBlend = 0;
+
+let mpHands = null;
+let mpPose = null;
+let trackedHandsData = [];
+let trackedPoseData = null;
+
+let prevHandPositions = [];
+let handVelocity = 0;
+
+let activePointers = [];
+let activeBouncers = [];
+let activeFeet = [];
+
+let particles = [];
+let gentleCreatures = [];
+
+let playerColors = [
+  [0, 255, 255],
+  [255, 0, 255],
+  [255, 230, 0]
+];
+
+let smogGraphics;
+let smogCleared = 0;
+
+let trashItems = [];
+let fishes = [];
+
+let clouds = [];
+let raindrops = [];
+let flowers = [];
+let grass = [];
+
+let artStrokes = [];
+let artEnergy = 0;
+let stars = [];
+
+let popBubbles = [];
+let bubblesPopped = 0;
+let ripples = [];
+let fireflies = [];
+
 let sunPulse = 0;
 
 let levelSettings = {
@@ -28,14 +71,19 @@ let levelSettings = {
   level3Flowers: 14,
   level4Energy: 6000,
   level5Bubbles: 24,
+
   grabAssist: 1.8,
+
   transitionSpeed: 0.018,
   transitionHold: 150,
+
   flowerSensitivity: 0.45,
   creatureAmount: 1,
   particleAmount: 0.7,
+
   bubbleSpeed: 0.75,
   bubbleSizeVariance: 1.25,
+
   showHands: true,
   showFeet: true,
   showSkeletonLines: true,
@@ -45,10 +93,10 @@ let levelSettings = {
 const textDict = {
   EN: {
     title: "Bronx Explorer 🌱",
-    lvl1: "Level 1: Gently wave to clear the smog.",
+    lvl1: "Level 1: Gently wave to clear the colorful smog.",
     lvl2: "Level 2: Slowly lift the river trash away.",
     lvl3: "Level 3: Touch clouds to make rain. Help the garden grow.",
-    lvl4: "Level 4: Draw slowly in the air with light.",
+    lvl4: "Level 4: Point one finger to draw with light.",
     lvl5: "Level 5: Touch, kick, and bounce the bubbles.",
     win: "Beautiful job. Thank you.",
     lvlText: "Level:",
@@ -59,7 +107,7 @@ const textDict = {
     lvl1: "Nivel 1: Mueve tus manos suavemente para limpiar el smog.",
     lvl2: "Nivel 2: Levanta lentamente la basura del río.",
     lvl3: "Nivel 3: Toca las nubes. Ayuda al jardín a crecer.",
-    lvl4: "Nivel 4: Dibuja lentamente en el aire con luz.",
+    lvl4: "Nivel 4: Dibuja con un dedo de luz.",
     lvl5: "Nivel 5: Toca, patea y rebota las burbujas.",
     win: "Hermoso trabajo. Gracias.",
     lvlText: "Nivel:",
@@ -72,21 +120,27 @@ function setup() {
   canvas.position(0, 0);
   canvas.style("z-index", "0");
 
-  determineDayNight();
   ensureCustomizationPanel();
   updateUI();
   initScene1();
 
   try {
-    video = createCapture({
-      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
-      audio: false
-    }, () => {
-      videoReady = true;
-      setupHandsTracking();
-      setupPoseTracking();
-      startTrackingLoop();
-    });
+    video = createCapture(
+      {
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user"
+        },
+        audio: false
+      },
+      () => {
+        videoReady = true;
+        setupHandsTracking();
+        setupPoseTracking();
+        startTrackingLoop();
+      }
+    );
 
     video.elt.setAttribute("playsinline", "true");
     video.hide();
@@ -124,6 +178,11 @@ function draw() {
 
   if (!safeGetChecked("calm-mode")) drawParticles();
 
+  if (!appStarted) {
+    drawLandingOverlay();
+    return;
+  }
+
   drawWipeIfNeeded();
 }
 
@@ -139,20 +198,59 @@ function drawWaitingScreen() {
   if (cameraError) text("Camera error: " + cameraError, width / 2, height / 2 + 45);
 }
 
-function determineDayNight() {
-  const hour = new Date().getHours();
-  isNightMode = hour < 6 || hour >= 18;
-  skyColor = isNightMode ? [18, 24, 58] : [135, 206, 235];
+function drawLandingOverlay() {
+  fill(20, 30, 45, introAlpha * 0.78);
+  noStroke();
+  rect(0, 0, width, height);
+
+  fill(255, introAlpha);
+  textAlign(CENTER, CENTER);
+  textSize(54);
+  text("Bronx Explorer", width / 2, height / 2 - 90);
+
+  textSize(26);
+  text("Move your hands gently to begin", width / 2, height / 2 - 25);
+
+  textSize(18);
+  text(
+    "A calm sensory journey through air, water, garden, light, and bubbles",
+    width / 2,
+    height / 2 + 20
+  );
+
+  fill(255, 230, 90, introAlpha * 0.9);
+  circle(width / 2, height / 2 + 95, 16 + sin(frameCount * 0.05) * 4);
+
+  const startingMotion = handVelocity > 8 || activePointers.length > 0;
+
+  if (startingMotion || mouseIsPressed) {
+    appStarted = true;
+    triggerWipeTransition(1);
+  }
 }
 
 function drawSky() {
-  background(skyColor[0], skyColor[1], skyColor[2]);
-  if (isNightMode) drawNightSky();
-  else drawSun(width - 160, 145, 100);
+  const day = [135, 206, 235];
+  const night = [18, 24, 58];
+
+  dayNightBlend = lerp(dayNightBlend, targetNightBlend, 0.01);
+
+  const r = lerp(day[0], night[0], dayNightBlend);
+  const g = lerp(day[1], night[1], dayNightBlend);
+  const b = lerp(day[2], night[2], dayNightBlend);
+
+  background(r, g, b);
+  skyColor = [r, g, b];
+
+  if (dayNightBlend > 0.25) drawNightSky();
+  if (dayNightBlend < 0.9) drawSun(width - 160, 145, 100);
 }
 
 function drawSun(x, y, baseSize) {
-  const touched = activePointers.concat(activeBouncers).some(p => dist(p.x, p.y, x, y) < baseSize * 1.35);
+  const touched = activePointers
+    .concat(activeBouncers)
+    .some(p => dist(p.x, p.y, x, y) < baseSize * 1.35);
+
   if (touched) {
     sunPulse = 20;
     if (frameCount % 14 === 0 && !safeGetChecked("calm-mode")) {
@@ -161,6 +259,7 @@ function drawSun(x, y, baseSize) {
   }
 
   if (sunPulse > 0) sunPulse *= 0.92;
+
   const size = baseSize + sin(frameCount * 0.025) * 4 + sunPulse;
 
   push();
@@ -168,6 +267,7 @@ function drawSun(x, y, baseSize) {
 
   stroke(255, 220, 60, 120);
   strokeWeight(5);
+
   for (let a = 0; a < TWO_PI; a += PI / 14) {
     const r1 = size * 0.62;
     const r2 = size * 1.18 + sin(frameCount * 0.025 + a) * 6;
@@ -177,6 +277,7 @@ function drawSun(x, y, baseSize) {
   noStroke();
   fill(255, 215, 40, 95);
   circle(0, 0, size * 1.8);
+
   fill(255, 235, 80, 220);
   circle(0, 0, size);
 
@@ -184,6 +285,7 @@ function drawSun(x, y, baseSize) {
     fill(0, 120);
     arc(-18, -10, 24, 24, 0, PI);
     arc(18, -10, 24, 24, 0, PI);
+
     noFill();
     stroke(0, 120);
     strokeWeight(3);
@@ -197,7 +299,12 @@ function drawNightSky() {
   if (stars.length < 130) {
     stars = [];
     for (let i = 0; i < 130; i++) {
-      stars.push({ x: random(width), y: random(height * 0.72), size: random(1, 4), twinkle: random(TWO_PI) });
+      stars.push({
+        x: random(width),
+        y: random(height * 0.72),
+        size: random(1, 4),
+        twinkle: random(TWO_PI)
+      });
     }
   }
 
@@ -209,7 +316,10 @@ function drawNightSky() {
 
   const moonX = width - 170;
   const moonY = 145;
-  const touched = activePointers.concat(activeBouncers).some(p => dist(p.x, p.y, moonX, moonY) < 95);
+
+  const touched = activePointers
+    .concat(activeBouncers)
+    .some(p => dist(p.x, p.y, moonX, moonY) < 95);
 
   if (touched && frameCount % 14 === 0 && !safeGetChecked("calm-mode")) {
     spawnExplosion(moonX, moonY, [220, 230, 255], 5);
@@ -218,6 +328,7 @@ function drawNightSky() {
   noStroke();
   fill(235, 235, 220, 225);
   circle(moonX, moonY, touched ? 118 : 105);
+
   fill(skyColor[0], skyColor[1], skyColor[2]);
   circle(moonX + 32, moonY - 14, touched ? 110 : 96);
 }
@@ -243,7 +354,7 @@ function setupHandsTracking() {
 
 function setupPoseTracking() {
   if (!window.Pose) {
-    console.warn("Pose not loaded. Add mediapipe pose script to index.html for feet tracking.");
+    console.warn("Pose not loaded. Add MediaPipe Pose script to index.html for feet tracking.");
     return;
   }
 
@@ -269,12 +380,15 @@ function startTrackingLoop() {
   async function processFrame() {
     if (video && video.elt && video.elt.readyState >= 2 && !isProcessing) {
       isProcessing = true;
+
       try {
         if (mpHands) await mpHands.send({ image: video.elt });
         if (mpPose) await mpPose.send({ image: video.elt });
       } catch (e) {}
+
       isProcessing = false;
     }
+
     requestAnimationFrame(processFrame);
   }
 
@@ -329,11 +443,13 @@ function drawHandsFromMediaPipe() {
 
     const wrist = mapped[0];
     const indexBase = mapped[5];
+
     const thumbTip = mapped[4];
     const indexTip = mapped[8];
     const middleTip = mapped[12];
     const ringTip = mapped[16];
     const pinkyTip = mapped[20];
+
     const palmCenter = averagePoints([mapped[0], mapped[5], mapped[9], mapped[13], mapped[17]]);
 
     const playerIndex = constrain(floor(palmCenter[0] / zoneWidth), 0, 2);
@@ -342,6 +458,7 @@ function drawHandsFromMediaPipe() {
     if (prevHandPositions[k]) {
       handVelocity += dist(indexTip[0], indexTip[1], prevHandPositions[k][0], prevHandPositions[k][1]);
     }
+
     prevHandPositions[k] = indexTip;
 
     const palmSize = dist(wrist[0], wrist[1], indexBase[0], indexBase[1]);
@@ -351,15 +468,34 @@ function drawHandsFromMediaPipe() {
 
     if (levelSettings.showHands) drawBetterHand(mapped, pColor, isGrabbing);
 
-    const handTargets = [thumbTip, indexTip, middleTip, ringTip, pinkyTip, palmCenter];
+    const handTargets = [
+      { pt: thumbTip, isIndexFinger: false },
+      { pt: indexTip, isIndexFinger: true },
+      { pt: middleTip, isIndexFinger: false },
+      { pt: ringTip, isIndexFinger: false },
+      { pt: pinkyTip, isIndexFinger: false },
+      { pt: palmCenter, isIndexFinger: false }
+    ];
 
     for (const target of handTargets) {
-      activePointers.push({ x: target[0], y: target[1], color: pColor });
+      activePointers.push({
+        x: target.pt[0],
+        y: target.pt[1],
+        color: pColor,
+        isIndexFinger: target.isIndexFinger
+      });
     }
 
-    activeBouncers.push({ x: palmCenter[0], y: palmCenter[1], id: k, color: pColor });
+    activeBouncers.push({
+      x: palmCenter[0],
+      y: palmCenter[1],
+      id: k,
+      color: pColor
+    });
 
-    if (palmCenter[1] > height * 0.7) activeFeet.push({ x: palmCenter[0], y: palmCenter[1] });
+    if (palmCenter[1] > height * 0.7) {
+      activeFeet.push({ x: palmCenter[0], y: palmCenter[1] });
+    }
 
     if (isGrabbing) handleTrashDragging(k, palmCenter);
     else releaseTrash(k);
@@ -368,7 +504,15 @@ function drawHandsFromMediaPipe() {
 
 function drawBetterHand(lm, color, isGrabbing) {
   const palm = [0, 5, 9, 13, 17];
-  const fingers = [[0,1,2,3,4], [0,5,6,7,8], [0,9,10,11,12], [0,13,14,15,16], [0,17,18,19,20]];
+
+  const fingers = [
+    [0, 1, 2, 3, 4],
+    [0, 5, 6, 7, 8],
+    [0, 9, 10, 11, 12],
+    [0, 13, 14, 15, 16],
+    [0, 17, 18, 19, 20]
+  ];
+
   const palmCenter = averagePoints([lm[0], lm[5], lm[9], lm[13], lm[17]]);
 
   if (levelSettings.showSkeletonLines) {
@@ -378,7 +522,8 @@ function drawBetterHand(lm, color, isGrabbing) {
 
     for (const finger of fingers) {
       for (let i = 0; i < finger.length - 1; i++) {
-        const a = lm[finger[i]], b = lm[finger[i + 1]];
+        const a = lm[finger[i]];
+        const b = lm[finger[i + 1]];
         line(a[0], a[1], b[0], b[1]);
       }
     }
@@ -407,19 +552,41 @@ function drawBetterHand(lm, color, isGrabbing) {
 function initScene1() {
   smogCleared = 0;
   sceneCompleteHold = 0;
+  targetNightBlend = 0;
+
   smogGraphics = createGraphics(width, height);
   smogGraphics.noStroke();
-  smogGraphics.fill(35, 35, 45, 205);
+
+  smogGraphics.fill(35, 45, 70, 190);
   smogGraphics.rect(0, 0, width, height);
 
-  for (let i = 0; i < 130; i++) {
-    smogGraphics.fill(120, 120, 130, random(35, 95));
-    smogGraphics.ellipse(random(width), random(height), random(120, 420), random(80, 260));
+  const smogColors = [
+    [120, 190, 210],
+    [180, 150, 220],
+    [255, 200, 120],
+    [140, 210, 170],
+    [230, 130, 150]
+  ];
+
+  for (let i = 0; i < 150; i++) {
+    const c = random(smogColors);
+    smogGraphics.fill(c[0], c[1], c[2], random(28, 70));
+    smogGraphics.ellipse(
+      random(width),
+      random(height),
+      random(120, 450),
+      random(80, 280)
+    );
   }
+
+  smogGraphics.fill(40, 40, 55, 80);
+  smogGraphics.rect(0, 0, width, height);
 }
 
 function initScene2() {
   sceneCompleteHold = 0;
+  targetNightBlend = 0;
+
   trashItems = [];
   fishes = [];
 
@@ -444,6 +611,8 @@ function initScene2() {
 
 function initScene3() {
   sceneCompleteHold = 0;
+  targetNightBlend = 0.15;
+
   clouds = [];
   raindrops = [];
   flowers = [];
@@ -461,18 +630,26 @@ function initScene3() {
   }
 
   for (let x = 0; x < width; x += 18) {
-    grass.push({ x, h: random(15, 55), maxH: random(65, 130) });
+    grass.push({
+      x,
+      h: random(15, 55),
+      maxH: random(65, 130)
+    });
   }
 }
 
 function initScene4() {
   sceneCompleteHold = 0;
+  targetNightBlend = 1;
+
   artStrokes = [];
   artEnergy = 0;
 }
 
 function initScene5() {
   sceneCompleteHold = 0;
+  targetNightBlend = 1;
+
   popBubbles = [];
   bubblesPopped = 0;
   ripples = [];
@@ -481,7 +658,12 @@ function initScene5() {
   for (let i = 0; i < 12; i++) spawnBubble();
 
   for (let i = 0; i < 90; i++) {
-    fireflies.push({ x: random(width), y: random(height), vx: random(-0.35, 0.35), vy: random(-0.35, 0.35) });
+    fireflies.push({
+      x: random(width),
+      y: random(height),
+      vx: random(-0.35, 0.35),
+      vy: random(-0.35, 0.35)
+    });
   }
 }
 
@@ -507,6 +689,7 @@ function drawScenicBackground() {
 function drawScene1() {
   if (handVelocity > 4 && !isWiping && smogGraphics) {
     const erasers = activePointers.concat(activeBouncers, activeFeet);
+
     smogGraphics.erase();
 
     for (const pt of erasers) {
@@ -526,27 +709,35 @@ function drawScene1() {
 }
 
 function drawScene2() {
+  drawSun(width - 165, 145, 95);
+
   fill(0, 100, 200, 135);
   noStroke();
 
   beginShape();
   vertex(0, height);
+
   for (let x = 0; x <= width; x += 50) {
     vertex(x, height * 0.7 + sin(frameCount * 0.035 + x * 0.01) * 12);
   }
+
   vertex(width, height);
   endShape(CLOSE);
 
   for (const f of fishes) {
     f.x += f.vx;
+
     if (f.x < 20 || f.x > width - 20) f.vx *= -1;
 
     for (const b of activeBouncers) {
-      if (dist(b.x, b.y, f.x, f.y) < 90) f.vx = f.x > b.x ? abs(f.vx) : -abs(f.vx);
+      if (dist(b.x, b.y, f.x, f.y) < 90) {
+        f.vx = f.x > b.x ? abs(f.vx) : -abs(f.vx);
+      }
     }
 
     textSize(42);
     textAlign(CENTER, CENTER);
+
     push();
     translate(f.x, f.y);
     scale(f.vx > 0 ? -1 : 1, 1);
@@ -558,6 +749,7 @@ function drawScene2() {
 
   for (const t of trashItems) {
     if (!t.active) continue;
+
     activeCount++;
 
     if (t.draggedBy === null) {
@@ -578,11 +770,15 @@ function drawScene2() {
       t.draggedBy = null;
       score += 20;
       updateScore();
-      if (!safeGetChecked("calm-mode")) spawnExplosion(t.x, t.y, [220, 50, 50], 8);
+
+      if (!safeGetChecked("calm-mode")) {
+        spawnExplosion(t.x, t.y, [220, 50, 50], 8);
+      }
     }
   }
 
   drawProgressBar(1 - activeCount / max(1, trashItems.length));
+
   if (activeCount === 0) beginSceneCompletion(3, "The river feels lighter...");
 }
 
@@ -593,25 +789,41 @@ function drawScene3() {
 
   stroke(46, 204, 113, 180);
   strokeWeight(4);
+
   for (const g of grass) {
     line(g.x, height, g.x + sin(frameCount * 0.018 + g.x) * 5, height - g.h);
   }
 
   for (const c of clouds) {
-    const touched = activePointers.concat(activeBouncers, activeFeet).some(p => dist(p.x, p.y, c.x, c.y) < c.w * 0.72);
+    const touched = activePointers
+      .concat(activeBouncers, activeFeet)
+      .some(p => dist(p.x, p.y, c.x, c.y) < c.w * 0.72);
+
     if (touched) c.pulse = 18;
+
+    if (touched && frameCount % 24 === 0) {
+      ripples.push({ x: c.x, y: c.y, radius: 30, alpha: 120 });
+    }
+
     if (c.pulse > 0) c.pulse *= 0.92;
 
     fill(225, 225, 225, 210);
     noStroke();
+
     ellipse(c.x, c.y, c.w + c.pulse, c.h + c.pulse * 0.4);
     ellipse(c.x - 60, c.y + 20, c.w * 0.7, c.h * 0.8);
     ellipse(c.x + 60, c.y + 20, c.w * 0.7, c.h * 0.8);
 
     if (touched && frameCount % 12 === 0) {
-      raindrops.push({ x: c.x + random(-100, 100), y: c.y + 50, active: true });
+      raindrops.push({
+        x: c.x + random(-100, 100),
+        y: c.y + 50,
+        active: true
+      });
     }
   }
+
+  drawRipples();
 
   for (const r of raindrops) {
     if (!r.active) continue;
@@ -619,6 +831,7 @@ function drawScene3() {
     fill(0, 150, 255, 135);
     noStroke();
     circle(r.x, r.y, 10);
+
     r.y += 4.2;
 
     if (r.y > height - 100) {
@@ -627,10 +840,13 @@ function drawScene3() {
       updateScore();
 
       for (const g of grass) {
-        if (abs(g.x - r.x) < 30 && g.h < g.maxH) g.h += 0.6;
+        if (abs(g.x - r.x) < 30 && g.h < g.maxH) {
+          g.h += 0.6;
+        }
       }
 
       let watered = false;
+
       for (const f of flowers) {
         if (abs(f.x - r.x) < 50 && f.size < f.maxSize) {
           f.size += 2;
@@ -655,9 +871,12 @@ function drawScene3() {
 
   for (const f of flowers) {
     const fy = height - 80 - f.size;
+
     if (f.cooldown > 0) f.cooldown--;
 
-    const flowerTouched = activePointers.concat(activeBouncers).some(p => dist(p.x, p.y, f.x, fy - 10) < 55);
+    const flowerTouched = activePointers
+      .concat(activeBouncers)
+      .some(p => dist(p.x, p.y, f.x, fy - 10) < 55);
 
     if (flowerTouched && f.cooldown <= 0) {
       f.size = min(f.maxSize, f.size + levelSettings.flowerSensitivity);
@@ -683,12 +902,16 @@ function drawScene3() {
       ellipse(f.x, fy - 10, f.size / 1.5, f.size);
     } else if (f.type === 1) {
       fill(255, 215, 0, 215);
-      for (let a = 0; a < TWO_PI; a += PI / 4) ellipse(f.x + cos(a) * 13, fy - 15 + sin(a) * 13, 13, 13);
+      for (let a = 0; a < TWO_PI; a += PI / 4) {
+        ellipse(f.x + cos(a) * 13, fy - 15 + sin(a) * 13, 13, 13);
+      }
       fill(139, 69, 19, 210);
       circle(f.x, fy - 15, 18);
     } else {
       fill(200, 100, 255, 215);
-      for (let a = 0; a < TWO_PI; a += PI / 3) ellipse(f.x + cos(a) * 11, fy - 10 + sin(a) * 11, 11, 11);
+      for (let a = 0; a < TWO_PI; a += PI / 3) {
+        ellipse(f.x + cos(a) * 11, fy - 10 + sin(a) * 11, 11, 11);
+      }
       fill(255, 255, 0, 210);
       circle(f.x, fy - 10, 13);
     }
@@ -696,37 +919,44 @@ function drawScene3() {
 
   const progress = constrain(grownFlowers / levelSettings.level3Flowers, 0, 1);
   drawProgressBar(progress);
+
   if (progress >= 1) beginSceneCompletion(4, "The garden is blooming...");
 }
 
 function drawScene4() {
-  background(20, 10, 40, 135);
+  targetNightBlend = 1;
 
-  for (let i = 0; i < 90; i++) {
-    fill(255, 255, 255, 70 + sin(frameCount * 0.025 + i) * 60);
-    noStroke();
-    circle((i * 97) % width, (i * 53) % height, 2);
-  }
+  background(
+    lerp(20, 18, dayNightBlend),
+    lerp(10, 24, dayNightBlend),
+    lerp(40, 58, dayNightBlend),
+    135
+  );
 
-  const brushes = activePointers.concat(activeBouncers, activeFeet);
+  drawNightSky();
+
+  const brushes = activePointers.filter(p => p.isIndexFinger);
 
   for (const brush of brushes) {
     if (frameCount % 3 === 0 && handVelocity > 1.5) {
       artStrokes.push({
-        x: brush.x + random(-12, 12),
-        y: brush.y + random(-12, 12),
+        x: brush.x + random(-8, 8),
+        y: brush.y + random(-8, 8),
         color: brush.color || [255, 255, 255],
         life: 255,
         size: random(8, 24)
       });
     }
+
     artEnergy += 0.38;
   }
 
   push();
   blendMode(ADD);
+
   for (let i = artStrokes.length - 1; i >= 0; i--) {
     const pt = artStrokes[i];
+
     pt.life -= 1.2;
     pt.y -= 0.35;
 
@@ -736,36 +966,35 @@ function drawScene4() {
 
     if (pt.life <= 0) artStrokes.splice(i, 1);
   }
+
   pop();
 
   const progress = constrain(artEnergy / levelSettings.level4Energy, 0, 1);
   drawProgressBar(progress);
-  if (progress >= 1) beginSceneCompletion(5, "Your light drawing is complete...");
+
+  if (progress >= 1) {
+    beginSceneCompletion(5, "Your light drawing is becoming night...");
+  }
 }
 
 function drawScene5() {
+  targetNightBlend = 1;
+
   for (const f of fireflies) {
     f.x += f.vx + sin(frameCount * 0.035) * 0.35;
     f.y += f.vy + cos(frameCount * 0.035) * 0.35;
+
     fill(255, 255, 150, 150);
     noStroke();
     circle(f.x, f.y, 4);
+
     if (f.x < 0) f.x = width;
     if (f.x > width) f.x = 0;
     if (f.y < 0) f.y = height;
     if (f.y > height) f.y = 0;
   }
 
-  for (let i = ripples.length - 1; i >= 0; i--) {
-    const r = ripples[i];
-    noFill();
-    stroke(255, 255, 255, r.alpha);
-    strokeWeight(3);
-    circle(r.x, r.y, r.radius);
-    r.radius += 2;
-    r.alpha -= 3;
-    if (r.alpha <= 0) ripples.splice(i, 1);
-  }
+  drawRipples();
 
   for (const b of popBubbles) {
     if (!b.active) continue;
@@ -774,30 +1003,50 @@ function drawScene5() {
     b.x += b.vx * levelSettings.bubbleSpeed;
     b.y += b.vy * levelSettings.bubbleSpeed;
 
-    stroke(255, 255, 255, 150);
-    strokeWeight(b.isRed ? 4 : 2);
-    fill(b.color[0], b.color[1], b.color[2], 160);
+    noStroke();
+    fill(b.color[0], b.color[1], b.color[2], 175);
     circle(b.x, b.y, b.radius * 2);
 
-    if (b.x < b.radius || b.x > width - b.radius) b.vx *= -1;
+    fill(255, 255, 255, 45);
+    circle(b.x - b.radius * 0.3, b.y - b.radius * 0.3, b.radius * 0.45);
+
+    if (b.x < b.radius || b.x > width - b.radius) {
+      b.vx *= -1;
+    }
 
     for (const kicker of activeBouncers.concat(activeFeet)) {
       if (dist(kicker.x, kicker.y, b.x, b.y) < b.radius + 65) {
         const angle = atan2(b.y - kicker.y, b.x - kicker.x);
         b.vx = cos(angle) * 6;
         b.vy = -7;
-        ripples.push({ x: b.x, y: b.y, radius: b.radius, alpha: 160 });
+        ripples.push({
+          x: b.x,
+          y: b.y,
+          radius: b.radius,
+          alpha: 160
+        });
       }
     }
 
-    const touchedByHand = activePointers.concat(activeBouncers).some(p => dist(p.x, p.y, b.x, b.y) < b.radius + 22);
-    const touchedByFoot = activeFeet.some(foot => dist(foot.x, foot.y, b.x, b.y) < b.radius + 72);
+    const touchedByHand = activePointers
+      .concat(activeBouncers)
+      .some(p => dist(p.x, p.y, b.x, b.y) < b.radius + 22);
+
+    const touchedByFoot = activeFeet.some(
+      foot => dist(foot.x, foot.y, b.x, b.y) < b.radius + 72
+    );
 
     if (touchedByHand || touchedByFoot) {
-      if (b.isRed) popBubble(b);
-      else {
+      if (b.isRed) {
+        popBubble(b);
+      } else {
         b.vy = -4;
-        ripples.push({ x: b.x, y: b.y, radius: b.radius, alpha: 150 });
+        ripples.push({
+          x: b.x,
+          y: b.y,
+          radius: b.radius,
+          alpha: 150
+        });
       }
     } else if (b.y > height - b.radius) {
       b.vy = -5;
@@ -811,11 +1060,17 @@ function drawScene5() {
 
   const progress = constrain(bubblesPopped / levelSettings.level5Bubbles, 0, 1);
   drawProgressBar(progress);
+
   if (progress >= 1) beginSceneCompletion(6, "The bubbles are floating away...");
 }
 
 function drawWinScene() {
-  background(44, 94, 79, 200);
+  targetNightBlend = 1;
+
+  background(44, 94, 79, 190);
+
+  drawNightSky();
+
   fill(255);
   textAlign(CENTER, CENTER);
   textSize(54);
@@ -843,12 +1098,13 @@ function beginSceneCompletion(target, message) {
 function drawSceneEndingCue() {
   if (sceneCompleteHold <= 0 || isWiping) return;
 
-  const a = map(sceneCompleteHold, 0, levelSettings.transitionHold, 0, 180);
-  fill(255, 255, 255, a);
+  const a = map(sceneCompleteHold, 0, levelSettings.transitionHold, 0, 165);
+
+  fill(255, 245, 220, a * 0.45);
   noStroke();
   rect(0, 0, width, height);
 
-  fill(30, 30, 40, constrain(a + 30, 0, 210));
+  fill(30, 30, 40, constrain(a + 25, 0, 190));
   textAlign(CENTER, CENTER);
   textSize(34);
   text(sceneCompleteMessage, width / 2, height / 2);
@@ -875,6 +1131,7 @@ function handleTrashDragging(k, palmCenter) {
   if (currentScene !== 2) return;
 
   let holding = false;
+
   for (const t of trashItems) {
     if (t.active && t.draggedBy === k) {
       t.x = palmCenter[0];
@@ -885,7 +1142,11 @@ function handleTrashDragging(k, palmCenter) {
 
   if (!holding) {
     for (const t of trashItems) {
-      if (t.active && t.draggedBy === null && dist(palmCenter[0], palmCenter[1], t.x, t.y) < t.radius * 3.4) {
+      if (
+        t.active &&
+        t.draggedBy === null &&
+        dist(palmCenter[0], palmCenter[1], t.x, t.y) < t.radius * 3.4
+      ) {
         t.draggedBy = k;
         break;
       }
@@ -895,6 +1156,7 @@ function handleTrashDragging(k, palmCenter) {
 
 function releaseTrash(k) {
   if (currentScene !== 2) return;
+
   for (const t of trashItems) {
     if (t.draggedBy === k) t.draggedBy = null;
   }
@@ -912,7 +1174,14 @@ function spawnBubble() {
     vx: random(-2.2, 2.2),
     vy: random(0.4, 1.8),
     radius,
-    color: isRed ? [255, 80, 90] : random([[80, 220, 255], [180, 120, 255], [120, 255, 180], [255, 220, 80]]),
+    color: isRed
+      ? [255, 80, 90]
+      : random([
+          [80, 220, 255],
+          [180, 120, 255],
+          [120, 255, 180],
+          [255, 220, 80]
+        ]),
     isRed,
     active: true
   });
@@ -924,14 +1193,19 @@ function popBubble(b) {
   score += 50;
   updateScore();
 
-  if (!safeGetChecked("calm-mode")) spawnExplosion(b.x, b.y, b.color, 8);
+  if (!safeGetChecked("calm-mode")) {
+    spawnExplosion(b.x, b.y, b.color, 8);
+  }
+
   setTimeout(spawnBubble, 900);
 }
 
 function spawnGentleCreature(x, y) {
   const isButterfly = random() < 0.65;
+
   gentleCreatures.push({
-    x, y,
+    x,
+    y,
     vx: random(-1.2, 1.2),
     vy: random(-2.2, -0.8),
     size: isButterfly ? random(24, 46) : random(18, 30),
@@ -944,6 +1218,7 @@ function spawnGentleCreature(x, y) {
 function drawGentleCreatures() {
   for (let i = gentleCreatures.length - 1; i >= 0; i--) {
     const c = gentleCreatures[i];
+
     c.x += c.vx + sin(frameCount * 0.08 + c.phase) * 0.9;
     c.y += c.vy + cos(frameCount * 0.05 + c.phase) * 0.35;
     c.life -= 1.2;
@@ -955,6 +1230,22 @@ function drawGentleCreatures() {
     noTint();
 
     if (c.life <= 0 || c.y < -60) gentleCreatures.splice(i, 1);
+  }
+}
+
+function drawRipples() {
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const r = ripples[i];
+
+    noFill();
+    stroke(255, 255, 255, r.alpha);
+    strokeWeight(3);
+    circle(r.x, r.y, r.radius);
+
+    r.radius += 2;
+    r.alpha -= 3;
+
+    if (r.alpha <= 0) ripples.splice(i, 1);
   }
 }
 
@@ -983,13 +1274,17 @@ class Particle {
 
 function spawnExplosion(x, y, color, count = 12) {
   const amount = floor(count * levelSettings.particleAmount);
-  for (let i = 0; i < amount; i++) particles.push(new Particle(x, y, color));
+
+  for (let i = 0; i < amount; i++) {
+    particles.push(new Particle(x, y, color));
+  }
 }
 
 function drawParticles() {
   for (let i = particles.length - 1; i >= 0; i--) {
     particles[i].update();
     particles[i].show();
+
     if (particles[i].life <= 0) particles.splice(i, 1);
   }
 }
@@ -997,7 +1292,6 @@ function drawParticles() {
 function triggerWipeTransition(targetScene) {
   if (!isWiping) {
     isWiping = true;
-    wipeX = -2000;
     nextScene = targetScene;
     transitionAlpha = 0;
   }
@@ -1006,18 +1300,28 @@ function triggerWipeTransition(targetScene) {
 function drawWipeIfNeeded() {
   if (!isWiping) return;
 
-  transitionAlpha = min(255, transitionAlpha + 255 * levelSettings.transitionSpeed);
-  fill(255, 255, 255, transitionAlpha);
+  transitionAlpha = min(210, transitionAlpha + 255 * levelSettings.transitionSpeed);
+
+  fill(255, 255, 255, transitionAlpha * 0.55);
   noStroke();
   rect(0, 0, width, height);
 
-  if (transitionAlpha >= 245 && currentScene !== nextScene) {
+  fill(255, 245, 210, transitionAlpha * 0.35);
+  ellipse(width * 0.3, height * 0.45, width * 0.9, height * 1.1);
+  ellipse(width * 0.7, height * 0.55, width * 0.9, height * 1.1);
+
+  if (transitionAlpha >= 190 && currentScene !== nextScene) {
     currentScene = nextScene;
+
+    if (currentScene >= 4) targetNightBlend = 1;
+    else if (currentScene === 3) targetNightBlend = 0.15;
+    else targetNightBlend = 0;
+
     updateUI();
     reinitCurrentScene();
   }
 
-  if (transitionAlpha >= 255) {
+  if (transitionAlpha >= 210) {
     isWiping = false;
     transitionAlpha = 0;
   }
@@ -1025,6 +1329,7 @@ function drawWipeIfNeeded() {
 
 function reinitCurrentScene() {
   sceneCompleteHold = 0;
+
   if (currentScene === 1) initScene1();
   else if (currentScene === 2) initScene2();
   else if (currentScene === 3) initScene3();
@@ -1038,6 +1343,7 @@ function updateScore() {
 
 function updateUI() {
   const lang = isEnglish ? textDict.EN : textDict.ES;
+
   safeSetText("title-text", lang.title);
   safeSetText("level-text", lang.lvlText);
   safeSetText("lang-btn", lang.btn);
@@ -1080,6 +1386,7 @@ function ensureCustomizationPanel() {
     <label>Show Hands: <input type="checkbox" id="show-hands" checked></label><br><br>
     <label>Show Feet: <input type="checkbox" id="show-feet" checked></label><br><br>
     <label>Show Skeleton Lines: <input type="checkbox" id="show-lines" checked></label><br><br>
+
     <label>Calm Mode: <input type="checkbox" id="calm-mode"></label><br><br>
     <label>Whimsical Faces: <input type="checkbox" id="whimsical-mode" checked></label><br><br>
     <label>Hide Admin in Fullscreen: <input type="checkbox" id="hide-admin-fullscreen" checked></label><br><br>
@@ -1117,6 +1424,7 @@ function applyCustomization() {
 
 function setAdminVisibilityForFullscreen() {
   const shouldHide = fullscreen() && levelSettings.hideAdminFullscreen;
+
   const controls = document.getElementById("controls");
   const ui = document.getElementById("ui-container");
   const panel = document.getElementById("settings-panel");
@@ -1142,11 +1450,14 @@ function safeGetValue(id, defaultVal) {
 }
 
 function averagePoints(points) {
-  let x = 0, y = 0;
+  let x = 0;
+  let y = 0;
+
   for (const p of points) {
     x += p[0];
     y += p[1];
   }
+
   return [x / points.length, y / points.length];
 }
 
@@ -1158,6 +1469,7 @@ function windowResized() {
 function resetGame() {
   score = 0;
   currentScene = 1;
+  targetNightBlend = 0;
   updateScore();
   updateUI();
   initScene1();
@@ -1170,7 +1482,9 @@ function toggleLanguage() {
 
 function toggleSettings() {
   const panel = document.getElementById("settings-panel");
-  if (panel) panel.style.display = panel.style.display === "block" ? "none" : "block";
+  if (panel) {
+    panel.style.display = panel.style.display === "block" ? "none" : "block";
+  }
 }
 
 function toggleFullscreen() {
@@ -1179,7 +1493,9 @@ function toggleFullscreen() {
 }
 
 function keyPressed() {
-  if (key === "f" || key === "F") toggleFullscreen();
+  if (key === "f" || key === "F") {
+    toggleFullscreen();
+  }
 
   if (key >= "1" && key <= "6") {
     currentScene = Number(key);
