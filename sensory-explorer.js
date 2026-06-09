@@ -24,8 +24,9 @@ let handVelocity = 0;
 let activePointers = []; 
 let activeBouncers = []; 
 let activeFeet = []; 
-// Brand Colors & Player Colors (Safer arrays without global Math dependencies)
-let bxcmColors = [ [44, 94, 79],, [255, 204, 0], [255, 107, 107] ];
+
+// Brand Colors
+let bxcmColors = [ [44, 94, 79], [26, 26, 46], [255, 204, 0], [255, 107, 107] ];
 let playerColors = [ [0, 255, 255], [255, 0, 255], [255, 255, 0] ];
 
 // Level Objects
@@ -39,13 +40,9 @@ let flowers = [];
 let grass = []; 
 let insects = []; 
 let scene3Timer = 0;
-
-// Level 4 (Magic Canvas) Objects
 let artStrokes = []; 
 let artEnergy = 0; 
 let stars = [];
-
-// Level 5 (Bubbles) Objects
 let popBubbles = []; 
 let bubblesPopped = 0; 
 let sunSize = 180;
@@ -56,7 +53,7 @@ let fireflies = [];
 const textDict = {
   EN: {
     title: "Bronx Explorer 🌱",
-    lvl1: "Level 1: Wave your arms slowly to clear the smog.",
+    lvl1: "Level 1: Wave your arms to clear the smog.",
     lvl2: "Level 2: Clean the river! Play with the fish!",
     lvl3: "Level 3: Touch clouds to make rain. Grow the garden!",
     lvl4: "Level 4: MAGIC CANVAS! Draw in the air with light!",
@@ -79,9 +76,18 @@ const textDict = {
 // ==========================================
 // CRASH-PROOF SAFETY SHIELD
 // ==========================================
-function safeSetText(id, txt) { let el = document.getElementById(id); if (el) el.innerText = txt; }
-function safeGetChecked(id) { let el = document.getElementById(id); return el ? el.checked : false; }
-function safeGetValue(id, defaultVal) { let el = document.getElementById(id); return el ? el.value : defaultVal; }
+function safeSetText(id, txt) { 
+  let el = document.getElementById(id); 
+  if (el) el.innerText = txt; 
+}
+function safeGetChecked(id) { 
+  let el = document.getElementById(id); 
+  return el ? el.checked : false; 
+}
+function safeGetValue(id, defaultVal) { 
+  let el = document.getElementById(id); 
+  return el ? el.value : defaultVal; 
+}
 
 // ==========================================
 // 2. MAIN P5.JS SETUP & DRAW
@@ -94,18 +100,22 @@ function setup() {
   updateUI(); 
   initScene1(); 
   
-  // Safe initialization callback
-  video = createCapture(VIDEO, () => { 
+  // Safe Camera Initialization
+  video = createCapture(VIDEO, function(stream) { 
     video.elt.width = 640; 
     video.elt.height = 480; 
+    video.elt.muted = true; // Crucial for browser autoplay policies
+    video.elt.setAttribute('playsinline', '');
+    
     setupTracking(video); 
     startMediaPipeTracker(video);
     videoReady = true; 
   });
   video.hide(); 
 }
+
 function draw() {
-  background(skyColor[0], skyColor[...](asc_slot://start-slot-6), skyColor, 120); 
+  background(skyColor[0], skyColor[1], skyColor[2], 120); 
 
   if (!videoReady) {
     fill(255); noStroke(); textAlign(CENTER, CENTER); textSize(32);
@@ -179,12 +189,8 @@ function windowResized() {
   if (currentScene === 5) initScene5();
 }
 
-function resetGame() {
-  score = 0; updateScore();
-}
-
 // ==========================================
-// 3. WEATHER & API SYSTEM
+// 3. WEATHER & SCENERY API
 // ==========================================
 async function fetchLiveWeather() {
   try {
@@ -193,15 +199,17 @@ async function fetchLiveWeather() {
     let code = data.current_weather.weathercode; 
     let isDay = data.current_weather.is_day;
     
-    [...](asc_slot://start-slot-8)if (isDay === 0) {
-      skyColor =; 
+    if (isDay === 0) {
+      skyColor = [20, 24, 82]; 
     } else if (code >= 50 && code <= 67) { 
       skyColor = [150, 160, 170]; 
       isRainingInBronx = true; 
     } else if (data.current_weather.time.includes("18:") || data.current_weather.time.includes("19:")) {
       skyColor = [253, 94, 83]; 
     }
-  } catch(e) {}
+  } catch(e) {
+    console.log("Weather fetch failed, using default.");
+  }
 }
 
 function drawScenicBackground() {
@@ -233,20 +241,20 @@ function drawGiantCloudWipe(xPos) {
 // 4. PARTICLES ENGINE
 // ==========================================
 class Particle {
-  constructor(x, y, color) {
+  constructor(x, y, colorArray) {
     this.x = x; this.y = y; 
     this.vx = random(-5, 5); this.vy = random(-5, 5);
-    this.life = 255; this.color = color; 
+    this.life = 255; this.color = colorArray; 
   }
   update() { this.x += this.vx; this.y += this.vy; this.life -= 10; }
   show() { 
     noStroke(); 
-    fill(this.color[0], this.[...](asc_slot://start-slot-10)color, this.[...](asc_slot://start-slot-12)color, this.life); 
+    fill(this.color[0], this.color[1], this.color[2], this.life); 
     circle(this.x, this.y, 8); 
   }
 }
-function spawnExplosion(x, y, color) { 
-  for (let i = 0; i < 20; i++) particles.push(new Particle(x, y, color)); 
+function spawnExplosion(x, y, colorArray) { 
+  for (let i = 0; i < 20; i++) particles.push(new Particle(x, y, colorArray)); 
 }
 function drawParticles() {
   for (let i = particles.length - 1; i >= 0; i--) {
@@ -260,12 +268,8 @@ function drawParticles() {
 // 5. STABLE MEDIAPIPE TRACKING
 // ==========================================
 function setupTracking(videoElement) {
-  // CRITICAL FIX: Safe global reference check for window.Hands
   let HandsConstructor = window.Hands || Hands;
-  if (!HandsConstructor) {
-    console.error("MediaPipe Hands script was not parsed correctly by the browser.");
-    return;
-  }
+  if (!HandsConstructor) return;
   
   mpHands = new HandsConstructor({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
   mpHands.setOptions({ maxNumHands: 6, modelComplexity: 1, minDetectionConfidence: 0.3, minTrackingConfidence: 0.3 });
@@ -300,7 +304,7 @@ function drawSkeletonsAndInteractions() {
   for (let k = 0; k < trackedHandsData.length; k++) {
     let landmarks = trackedHandsData[k];
     
-    // SAFE PARSING: Iteratively map without the arrow function syntax parser error
+    // SAFELY MAPPED LANDMARKS
     let mappedLm = [];
     for (let i = 0; i < landmarks.length; i++) {
       let mx = map(landmarks[i].x, 0, 1, 0, width);
@@ -308,60 +312,59 @@ function drawSkeletonsAndInteractions() {
       mappedLm.push([width - mx, my]);
     }
     
-    [...](asc_slot://start-slot-14)let wrist = mappedLm[0]; 
-    let indexBase = mappedLm[...](asc_slot://start-slot-15); 
-    let indexTip = mappedLm[...](asc_slot://start-slot-16); 
-    let palmCenter = mappedLm;
+    let wrist = mappedLm[0]; 
+    let indexBase = mappedLm[5]; 
+    let indexTip = mappedLm[8]; 
+    let palmCenter = mappedLm[9];
     
-    // Stable pairing based on palm location zones
     let playerIndex = constrain(Math.floor(palmCenter[0] / zoneWidth), 0, 2);
     let pColor = playerColors[playerIndex];
 
-    [...](asc_slot://start-slot-18)stroke(pColor[0], pColor[...](asc_slot://start-slot-19), pColor[...](asc_slot://start-slot-20), 120); 
+    stroke(pColor[0], pColor[1], pColor[2], 120); 
     strokeWeight(6); 
     noFill();
     beginShape(); 
     for (let j = 0; j < 21; j++) {
-      vertex(mappedLm[j][0], mappedLm[j]); 
+      vertex(mappedLm[j][0], mappedLm[j][1]); 
     }
     endShape();
     
-    [...](asc_slot://start-slot-22)if (prevHandPositions[k]) {
-      handVelocity += dist(indexTip[0], indexTip, prevHandPositions[k][0], prevHandPositions[k]);
+    if (prevHandPositions[k]) {
+      handVelocity += dist(indexTip[0], indexTip[1], prevHandPositions[k][0], prevHandPositions[k][1]);
     }
     prevHandPositions[k] = indexTip;
 
-    [...](asc_slot://start-slot-24)let palmSize = dist(wrist[0], wrist, indexBase[0], indexBase);
-    let indexExt = dist(wrist[0], wrist, indexTip[0], indexTip);
+    let palmSize = dist(wrist[0], wrist[1], indexBase[0], indexBase[1]);
+    let indexExt = dist(wrist[0], wrist[1], indexTip[0], indexTip[1]);
     let isGrabbing = (indexExt < palmSize * 1.5); 
 
-    [...](asc_slot://start-slot-26)if (isGrabbing) {
-      fill(255, 255, 255, 100); noStroke(); circle(palmCenter[0], palmCenter, 50); 
-      activeBouncers.[...](asc_slot://start-slot-28)push({ x: palmCenter[0], y: palmCenter, id: k, color: pColor }); 
+    if (isGrabbing) {
+      fill(255, 255, 255, 100); noStroke(); circle(palmCenter[0], palmCenter[1], 50); 
+      activeBouncers.push({ x: palmCenter[0], y: palmCenter[1], id: k, color: pColor }); 
       
-      [...](asc_slot://start-slot-30)// Fallback: Low hands in bubble level count as feet (stepping)
-      if (palmCenter > height * 0.7) {
-        activeFeet.[...](asc_slot://start-slot-32)push({ x: palmCenter[0], y: palmCenter });
+      // Fallback: If hands are low, they act as feet for stomping bubbles
+      if (palmCenter[1] > height * 0.7) {
+        activeFeet.push({ x: palmCenter[0], y: palmCenter[1] });
       }
 
       if (currentScene === 2) {
         let holding = false;
         for (let t of trashItems) { 
-          if (t.active && t.[...](asc_slot://start-slot-34)draggedBy === k) { 
-            t.x = palmCenter[0]; t.y = palmCenter; holding = true; 
+          if (t.active && t.draggedBy === k) { 
+            t.x = palmCenter[0]; t.y = palmCenter[1]; holding = true; 
           } 
         }
         if (!holding) {
           for (let t of trashItems) { 
-            if (t.active && !t.[...](asc_slot://start-slot-36)draggedBy && dist(palmCenter[0], palmCenter, t.x, t.y) < t.radius * 2.5) { 
-              t.[...](asc_slot://start-slot-38)draggedBy = k; break; 
+            if (t.active && !t.draggedBy && dist(palmCenter[0], palmCenter[1], t.x, t.y) < t.radius * 2.5) { 
+              t.draggedBy = k; break; 
             } 
           }
         }
       }
     } else {
-      fill(255); noStroke(); circle(indexTip[0], indexTip, 15);
-      activePointers.[...](asc_slot://start-slot-40)push({ x: indexTip[0], y: indexTip, color: pColor }); 
+      fill(255); noStroke(); circle(indexTip[0], indexTip[1], 15);
+      activePointers.push({ x: indexTip[0], y: indexTip[1], color: pColor }); 
       if (currentScene === 2) { 
         for (let t of trashItems) {
           if (t.draggedBy === k) t.draggedBy = null; 
@@ -374,6 +377,37 @@ function drawSkeletonsAndInteractions() {
 // ==========================================
 // 6. SCENE & LEVEL DRAW FUNCTIONS
 // ==========================================
+function initScene1() { smogGraphics = createGraphics(width, height); smogGraphics.background(150, 150, 150, 240); smogCleared = 0; }
+function initScene2() { 
+  trashItems = []; fishes = [];
+  for(let i=0; i<10; i++) trashItems.push({ x: random(100, width - 100), y: random(height*0.7, height - 50), radius: 35, active: true, draggedBy: null }); 
+  for(let i=0; i<5; i++) fishes.push({ x: random(width), y: random(height*0.75, height-50), vx: random(2, 4) * (random()>0.5?1:-1) });
+}
+function initScene3() { 
+  clouds = [ { x: width*0.15, y: 80, w: 400, h: 180 }, { x: width*0.5, y: 60, w: 500, h: 220 }, { x: width*0.85, y: 80, w: 400, h: 180 } ]; 
+  raindrops = []; flowers = []; insects = []; scene3Timer = 1800; grass = [];
+  for(let x=0; x<width; x+=15) grass.push({x: x, h: random(10, 20), maxH: random(40, 70)});
+}
+function initScene4() {
+  artStrokes = []; artEnergy = 0; stars = [];
+  for(let i=0; i<60; i++) stars.push({x: random(width), y: random(height), size: random(1, 4), twinkle: random(TWO_PI)});
+}
+function initScene5() { 
+  popBubbles = []; bubblesPopped = 0; ripples = []; fireflies = []; 
+  for(let i=0; i<8; i++) spawnBubble(); 
+  for(let i=0; i<30; i++) fireflies.push({x: random(width), y: random(height), vx: random(-0.5, 0.5), vy: random(-0.5, 0.5)}); 
+}
+
+function spawnBubble() { 
+  let baseSize = parseInt(safeGetValue('bubble-size', 45));
+  let isRed = random() < 0.4; 
+  let bColor = isRed ? bxcmColors[3] : random([bxcmColors[0], bxcmColors[1], bxcmColors[2]]);
+  popBubbles.push({ 
+    x: random(100, width-100), y: -100, vx: random(-1, 1), vy: random(2, 4), 
+    radius: baseSize + random(-10, 10), isRed: isRed, color: bColor, active: true 
+  }); 
+}
+
 function drawScene1() {
   if (handVelocity > 5 && !isWiping) { 
     let allErasers = activePointers.concat(activeBouncers);
@@ -427,11 +461,15 @@ function drawScene3() {
   noStroke(); fill(101, 67, 33, 150); rect(0, height - 120, width, 120); 
   
   stroke(46, 204, 113, 200); strokeWeight(4);
-  for (let g of grass) line(g.x, height, g.x + sin(frameCount*0.02 + g.x)*5, height - g.h);
+  for (let g of grass) {
+    line(g.x, height, g.x + sin(frameCount*0.02 + g.x)*5, height - g.h);
+  }
 
   for (let c of clouds) {
     fill(220, 220, 220, 220); noStroke();
-    ellipse(c.x, c.y, c.w, c.h); ellipse(c.x-60, c.y+20, c.w*.7, c.h*.8); ellipse(c.x+60, c.y+20, c.w*.7, c.h*.8);
+    ellipse(c.x, c.y, c.w, c.h); 
+    ellipse(c.x-60, c.y+20, c.w*.7, c.h*.8); 
+    ellipse(c.x+60, c.y+20, c.w*.7, c.h*.8);
     
     let isTouched = false;
     for(let p of activePointers) if(dist(p.x, p.y, c.x, c.y) < c.w/2) isTouched = true;
@@ -447,13 +485,18 @@ function drawScene3() {
       fill(0, 150, 255, 150); noStroke(); circle(r.x, r.y, 12); r.y += 6; 
       if (r.y > height - 100) { 
         r.active = false; score += 2; safeSetText('score', score);
-        for (let g of grass) { if (abs(g.x - r.x) < 30 && g.h < g.maxH) g.h += 1; }
-
+        for (let g of grass) { 
+          if (abs(g.x - r.x) < 30 && g.h < g.maxH) g.h += 1; 
+        }
         let watered = false;
         for (let f of flowers) {
-          if (dist(f.x, 0, r.x, 0) < 50 && f.size < f.maxSize) { f.size += 5; watered = true; break; }
+          if (dist(f.x, 0, r.x, 0) < 50 && f.size < f.maxSize) { 
+            f.size += 5; watered = true; break; 
+          }
         }
-        if (!watered && flowers.length < 25) flowers.push({ x: r.x, size: 5, maxSize: random(45, 80), type: floor(random(3)), cooldown: 0 });
+        if (!watered && flowers.length < 25) {
+          flowers.push({ x: r.x, size: 5, maxSize: random(45, 80), type: floor(random(3)), cooldown: 0 });
+        }
       }
     }
   }
@@ -477,9 +520,17 @@ function drawScene3() {
     if (f.cooldown > 0) f.cooldown--;
     
     fill(46, 204, 113, 200); noStroke(); rect(f.x - 3, fCenterY, 6, f.size); 
-    if (f.type === 0) { fill(255, 105, 180, 220); ellipse(f.x, fCenterY - 10, f.size/1.5, f.size); } 
-    else if (f.type === 1) { fill(255, 215, 0, 220); for(let a=0; a<TWO_PI; a+=PI/4) ellipse(f.x + cos(a)*15, fCenterY - 15 + sin(a)*15, 15, 15); fill(139, 69, 19); circle(f.x, fCenterY - 15, 20); } 
-    else { fill(200, 100, 255, 220); for(let a=0; a<TWO_PI; a+=PI/3) ellipse(f.x + cos(a)*12, fCenterY - 10 + sin(a)*12, 12, 12); fill(255, 255, 0); circle(f.x, fCenterY - 10, 15); }
+    if (f.type === 0) { 
+      fill(255, 105, 180, 220); ellipse(f.x, fCenterY - 10, f.size/1.5, f.size); 
+    } else if (f.type === 1) { 
+      fill(255, 215, 0, 220); 
+      for(let a=0; a<TWO_PI; a+=PI/4) ellipse(f.x + cos(a)*15, fCenterY - 15 + sin(a)*15, 15, 15); 
+      fill(139, 69, 19); circle(f.x, fCenterY - 15, 20); 
+    } else { 
+      fill(200, 100, 255, 220); 
+      for(let a=0; a<TWO_PI; a+=PI/3) ellipse(f.x + cos(a)*12, fCenterY - 10 + sin(a)*12, 12, 12); 
+      fill(255, 255, 0); circle(f.x, fCenterY - 10, 15); 
+    }
   }
 
   for (let i = insects.length - 1; i >= 0; i--) {
@@ -495,7 +546,6 @@ function drawScene3() {
   }
 }
 
-// LEVEL 4: MAGIC CANVAS
 function drawScene4() {
   background(20, 10, 40, 150); 
 
@@ -523,7 +573,7 @@ function drawScene4() {
   for (let i = artStrokes.length - 1; i >= 0; i--) {
     let pt = artStrokes[i];
     pt.life -= 3; pt.y -= 1; 
-    fill(pt.color[0], pt.[...](asc_slot://start-slot-42)color, pt.[...](asc_slot://start-slot-44)color, pt.life); noStroke();
+    fill(pt.color[0], pt.color[1], pt.color[2], pt.life); noStroke();
     circle(pt.x, pt.y, pt.size * (pt.life/255));
     if (pt.life <= 0) artStrokes.splice(i, 1);
   }
@@ -532,7 +582,6 @@ function drawScene4() {
   if (artEnergy >= 2000 && !isWiping) triggerWipeTransition(5);
 }
 
-// LEVEL 5: BUBBLES & WHIMSICAL SUN
 function drawScene5() {
   let sunX = width - 180; let sunY = 180;
   sunSize = 180 + sin(frameCount * 0.02) * 8; 
@@ -549,6 +598,7 @@ function drawScene5() {
   let sunTouched = false;
   for(let p of activePointers) if(dist(p.x, p.y, sunX, sunY) < sunSize/2) sunTouched = true;
   for(let b of activeBouncers) if(dist(b.x, b.y, sunX, sunY) < sunSize/2) sunTouched = true;
+  
   if (sunTouched && frameCount % 4 === 0) {
     sunSize += 20; spawnExplosion(sunX, sunY + 80, [255, 255, 0]);
   }
@@ -561,83 +611,4 @@ function drawScene5() {
   }
 
   for (let r of ripples) {
-    noFill(); stroke(255, 255, 255, r.alpha); strokeWeight(3); circle(r.x, r.y, r.radius);
-    r.radius += 3; r.alpha -= 5;
-  }
-
-  for (let i = popBubbles.length - 1; i >= 0; i--) {
-    let b = popBubbles[i];
-    if (b.active) {
-      b.vy += 0.015; b.x += b.vx; b.y += b.vy;
-
-      stroke(255, 255, 255, 180); strokeWeight(b.isRed ? 4 : 2); 
-      fill(b.color[0], b.[...](asc_slot://start-slot-46)color, b.[...](asc_slot://start-slot-48)color, 180); circle(b.x, b.y, b.radius * 2);
-      if (b.x < b.radius || b.x > width - b.radius) b.vx *= -1;
-
-      for (let kicker of activeBouncers) {
-        if (dist(kicker.x, kicker.y, b.x, b.y) < b.radius + 40) {
-          let angle = atan2(b.y - kicker.y, b.x - kicker.x);
-          b.vx = cos(angle) * 7; b.vy = sin(angle) * 7 - 2; 
-          ripples.push({x: b.x, y: b.y, radius: b.radius, alpha: 200});
-        }
-      }
-
-      let pointed = false;
-      for (let p of activePointers) { if (dist(p.x, p.y, b.x, b.y) < b.radius) pointed = true; }
-      
-      let steppedOn = false;
-      if (b.y > height - b.radius) {
-        for (let foot of activeFeet) if (dist(foot.x, foot.y, b.x, b.y) < b.radius + 50) steppedOn = true;
-      }
-
-      if (pointed || steppedOn) {
-        if (b.isRed) popBubble(b); 
-        else if (pointed) b.vy = -3; 
-      } else if (b.y > height - b.radius) {
-        b.vy = -6; 
-      }
-
-      if (b.y > height + 100 || b.y < -150) { b.active = false; setTimeout(spawnBubble, 500); }
-    }
-  }
-
-  if (bubblesPopped >= 30 && !isWiping) triggerWipeTransition(6);
-}
-
-function popBubble(b) {
-  b.active = false; bubblesPopped++; score += 50; safeSetText('score', score);
-  if(!safeGetChecked('calm-mode')) spawnExplosion(b.x, b.y, b.color);
-  setTimeout(spawnBubble, 800);
-}
-
-// ==========================================
-// 7. USER INTERFACE
-// ==========================================
-function updateUI() {
-  let lang = isEnglish ? textDict.EN : textDict.ES;
-  safeSetText('level-display', currentScene);
-  if (currentScene === 1) safeSetText('instructions', lang.lvl1);
-  if (currentScene === 2) safeSetText('instructions', lang.lvl2);
-  if (currentScene === 3) safeSetText('instructions', lang.lvl3);
-  if (currentScene === 4) safeSetText('instructions', lang.lvl4);
-  if (currentScene === 5) safeSetText('instructions', lang.lvl5);
-  if (currentScene === 6) safeSetText('instructions', lang.win);
-}
-
-function toggleLanguage() {
-  isEnglish = !isEnglish; let lang = isEnglish ? textDict.EN : textDict.ES;
-  safeSetText('title-text', lang.title); safeSetText('level-text', lang.lvlText); safeSetText('lang-btn', lang.btn);
-  updateUI();
-}
-
-function toggleSettings() {
-  let panel = document.getElementById('settings-panel');
-  if (panel) panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
-}
-
-function toggleFullscreen() {
-  let fs = fullscreen();
-  fullscreen(!fs);
-  let btn = document.getElementById('fs-btn');
-  if(btn) btn.innerText = !fs ? "↙ Exit Fullscreen" : "⛶ Fullscreen";
-}
+    noFill(); stroke
